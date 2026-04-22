@@ -41,6 +41,7 @@ export interface ResolvedLlmConfig {
   model: string | null
   apiBase: string
   apiKey: string | null
+  nativeToolCall: boolean
 }
 
 export interface ResolvedMineruConfig {
@@ -110,6 +111,7 @@ function getLlmProviderDefaults(capability: LlmCapability) {
     model: sceneModel,
     apiBase: sceneObject?.apiBase ?? llm?.apiBase ?? null,
     apiKey: sceneObject?.apiKey ?? llm?.apiKey ?? null,
+    nativeToolCall: sceneObject?.nativeToolCall ?? false,
   }
 }
 
@@ -127,6 +129,7 @@ export function resolveLlmConfig(input?: {
     model: input?.model?.trim() || capabilityDefaults.model,
     apiBase: input?.apiBase?.trim() || capabilityDefaults.apiBase || "",
     apiKey: input?.apiKey?.trim() || capabilityDefaults.apiKey || null,
+    nativeToolCall: capabilityDefaults.nativeToolCall,
   }
 }
 

@@ -43,6 +43,11 @@ export interface LocalChatMessageDto {
   role: "user" | "assistant"
   content: string
   createdAt: string
+  citations?: Array<Record<string, unknown>>
+  thoughts?: string[]
+  steps?: Array<{ text: string; status: "done" | "running" }>
+  attachments?: Array<Record<string, unknown>>
+  runId?: string | null
 }
 
 export type WorkbenchTabType = "welcome" | "document" | "note" | "graph"

@@ -85,12 +85,12 @@ export function useDesktopApi() {
       request<LocalChatThreadDto>("/threads", { method: "POST", body: JSON.stringify(payload) }),
     listMessages: (threadId: string) => request<{ items: LocalChatMessageDto[] }>(`/threads/${threadId}/messages`),
     sendMessage: async (threadId: string, message: string) => {
-      const response = await fetch(`${API_BASE}/threads/${threadId}/messages/stream`, {
+      const response = await fetch(`${API_BASE}/threads/${threadId}/runs/stream`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message, mode: "agent" }),
       })
 
       if (!response.ok || !response.body) {

@@ -7,12 +7,6 @@ export const proposalKeys = {
     pending: ['proposals', 'pending'] as const,
 }
 
-/**
- * Pending proposals 查询
- *
- * 数据来源优先级：SSE 推送 > IndexedDB 缓存 > API 兜底
- * 页面刷新后先从 IndexedDB 恢复 pending proposals，再用 API 同步。
- */
 export function usePendingProposals() {
     const queryClient = useQueryClient()
     return useQuery({
@@ -31,9 +25,6 @@ export function usePendingProposals() {
     })
 }
 
-/**
- * 恢复 IndexedDB 中的 pending proposals 到 query cache（组件挂载时调用）
- */
 export async function restoreProposalsFromIdb(
     queryClient: ReturnType<typeof useQueryClient>
 ) {
@@ -48,12 +39,9 @@ export async function restoreProposalsFromIdb(
                 return newOnes.length > 0 ? [...existing, ...newOnes] : existing
             })
         }
-    } catch { /* IndexedDB 不可用时静默降级 */ }
+    } catch { /* IndexedDB unavailable */ }
 }
 
-/**
- * Proposal 审批操作（approve / reject）
- */
 export function useProposalAction() {
     const queryClient = useQueryClient()
 
@@ -62,9 +50,7 @@ export function useProposalAction() {
             id: string
             action: 'approve' | 'reject'
             comment?: string
-        }) => {
-            return proposalApi.action(id, action, comment)
-        },
+        }) => proposalApi.action(id, action, comment),
         onMutate: async ({ id, action }) => {
             await queryClient.cancelQueries({ queryKey: proposalKeys.pending })
             const previous = queryClient.getQueryData<ProposalInfo[]>(proposalKeys.pending)
@@ -72,7 +58,6 @@ export function useProposalAction() {
             queryClient.setQueryData<ProposalInfo[]>(proposalKeys.pending, (old) =>
                 (old ?? []).map(p => p.id === id ? { ...p, status: newStatus } : p)
             )
-            // 同步到 IndexedDB
             dbUpdate<ProposalInfo>(STORES.PROPOSALS, id, { status: newStatus }).catch(console.warn)
             return { previous }
         },
@@ -81,18 +66,37 @@ export function useProposalAction() {
                 queryClient.setQueryData(proposalKeys.pending, context.previous)
             }
         },
+        onSuccess: (data, variables) => {
+            const actionType = data?.proposal?.action_type
+            const mutation = data?.mutation
+            if (actionType === 'manage_notes') {
+                queryClient.invalidateQueries({ queryKey: ['notes'] })
+            }
+            if (actionType === 'manage_kg_node' || actionType === 'manage_kg_edge') {
+                queryClient.invalidateQueries({ queryKey: ['roadmap'] })
+            }
+            if (actionType === 'tag') {
+                queryClient.invalidateQueries({ queryKey: ['documents'] })
+                queryClient.invalidateQueries({ queryKey: ['documents-search'] })
+            }
+            if (variables.action === 'approve') {
+                queryClient.invalidateQueries({ queryKey: ['chat', 'messages'] })
+            }
+            if (mutation?.resource === 'notes') {
+                queryClient.invalidateQueries({ queryKey: ['notes'] })
+            }
+            if (mutation?.resource === 'kg_node' || mutation?.resource === 'kg_edge') {
+                queryClient.invalidateQueries({ queryKey: ['roadmap'] })
+            }
+        },
         onSettled: () => {
             queryClient.invalidateQueries({ queryKey: proposalKeys.pending })
-            // Proposal 执行可能修改 tags/notes 等，需刷新文献库数据
             queryClient.invalidateQueries({ queryKey: ['documents'] })
             queryClient.invalidateQueries({ queryKey: ['documents-search'] })
         },
     })
 }
 
-/**
- * 清理 IndexedDB 中指定 session 的 proposals（删除 session / resend 时调用）
- */
 export async function clearProposalsForSession(sessionId: string) {
     try {
         const all = await dbGetAll<ProposalInfo>(STORES.PROPOSALS)
@@ -100,15 +104,13 @@ export async function clearProposalsForSession(sessionId: string) {
         if (toDelete.length > 0) {
             await dbDeleteMany(STORES.PROPOSALS, toDelete)
         }
-    } catch { /* 静默降级 */ }
+    } catch { /* silent */ }
 }
 
-/** 将 API 返回的 proposals 同步到 IndexedDB */
 async function _syncProposalsToIdb(proposals: ProposalInfo[]) {
     if (proposals.length > 0) {
         await dbPutMany(STORES.PROPOSALS, proposals)
     }
-    // 清理 IndexedDB 中已不再 pending 的旧记录
     const all = await dbGetAll<ProposalInfo>(STORES.PROPOSALS)
     const pendingIds = new Set(proposals.map(p => p.id))
     const stale = all.filter(p => p.status === 'pending' && !pendingIds.has(p.id)).map(p => p.id)

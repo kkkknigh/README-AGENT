@@ -19,6 +19,7 @@ import { htmlRouter } from "./routes/html.js"
 import { adminRouter } from "./routes/admin.js"
 import { linksRouter } from "./routes/links.js"
 import { proposalRouter } from "./routes/proposals.js"
+import { runsRouter } from "./transport/routes/runs.js"
 import "./db/index.js"
 import { getRuntimeHost, getRuntimePort } from "./config.js"
 
@@ -49,6 +50,7 @@ app.use("/html", htmlRouter)
 app.use("/admin", adminRouter)
 app.use("/links", linksRouter)
 app.use("/proposals", proposalRouter)
+app.use("/", runsRouter)
 app.use("/tabs", tabsRouter)
 app.use("/", chatRouter)
 app.use("/search", searchRouter)

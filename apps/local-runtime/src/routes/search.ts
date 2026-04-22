@@ -1,5 +1,6 @@
 import { Router } from "express"
 import { db } from "../db/index.js"
+import { searchDocumentChunks } from "../services/search.js"
 
 export const searchRouter = Router()
 
@@ -11,17 +12,15 @@ searchRouter.post("/workspace", (req, res) => {
     return
   }
 
-  const rows = db.prepare(`
-    SELECT d.remote_id, d.title
-    FROM workspace_document_links l
-    INNER JOIN remote_documents d ON d.remote_id = l.remote_document_id
-    WHERE l.workspace_id = ?
-      AND d.title LIKE ?
-    ORDER BY d.title ASC
-    LIMIT 20
-  `).all(workspaceId, `%${query}%`) as Array<{ remote_id: string; title: string }>
+  const chunkHits = searchDocumentChunks({ query, workspaceId, limit: 10 }).map((item) => ({
+    remote_id: item.documentId,
+    title: item.text,
+    page: item.page,
+    chunkId: item.chunkId,
+    score: item.score,
+  }))
 
-  res.json({ items: rows })
+  res.json({ items: chunkHits })
 })
 
 searchRouter.post("/hybrid", (req, res) => {
@@ -39,7 +38,15 @@ searchRouter.post("/hybrid", (req, res) => {
     LIMIT 20
   `).all(`%${query}%`) as Array<{ remote_id: string; title: string }>
 
-  res.json({ items: rows })
+  const chunkHits = searchDocumentChunks({ query, limit: 10 }).map((item) => ({
+    remote_id: item.documentId,
+    title: item.text,
+    page: item.page,
+    chunkId: item.chunkId,
+    score: item.score,
+  }))
+
+  res.json({ items: [...chunkHits, ...rows] })
 })
 
 searchRouter.post("/current-tab", (req, res) => {
@@ -50,13 +57,17 @@ searchRouter.post("/current-tab", (req, res) => {
     return
   }
 
-  const rows = db.prepare(`
-    SELECT remote_id, title
-    FROM remote_documents
-    WHERE remote_id = ?
-      AND title LIKE ?
-    LIMIT 1
-  `).all(documentId, `%${query}%`) as Array<{ remote_id: string; title: string }>
+  const rows = searchDocumentChunks({
+    query,
+    documentId,
+    limit: 12,
+  }).map((item) => ({
+    remote_id: item.documentId,
+    title: item.text,
+    page: item.page,
+    chunkId: item.chunkId,
+    score: item.score,
+  }))
 
   res.json({ items: rows })
 })

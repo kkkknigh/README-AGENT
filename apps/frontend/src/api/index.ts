@@ -38,10 +38,17 @@ type StreamHandlers<T> = {
   onError?: (error: unknown) => void
 }
 
+type ChatStreamRunStartedEvent = {
+  type: "run_started"
+  runId: string
+  sessionId: string
+}
+
 type ChatStreamStepEvent = {
   type: "step"
   sessionId?: string
   step?: string
+  status?: "running" | "done"
 }
 
 type ChatStreamChunkEvent = {
@@ -53,6 +60,7 @@ type ChatStreamChunkEvent = {
 type ChatStreamFinalEvent = {
   type: "final"
   sessionId?: string
+  runId?: string
   response?: string
   citations?: any[]
   steps?: string[]
@@ -92,6 +100,7 @@ type ChatStreamProposalEvent = {
 }
 
 export type ChatStreamEvent =
+  | ChatStreamRunStartedEvent
   | ChatStreamStepEvent
   | ChatStreamChunkEvent
   | ChatStreamFinalEvent
@@ -100,6 +109,8 @@ export type ChatStreamEvent =
   | ChatStreamMutationEvent
   | ChatStreamAckEvent
   | ChatStreamProposalEvent
+
+const activeRunIdsBySession = new Map<string, string>()
 
 export interface PdfUploadResponse {
   pdfId?: string
@@ -238,6 +249,9 @@ type SessionMessageRecord = {
   created_time: string
   citations: any[]
   attachments: any[]
+  thoughts?: string[]
+  steps?: Array<{ text: string; status: "done" | "running" }>
+  runId?: string | null
 }
 
 export interface GraphNodeRecord {
@@ -579,16 +593,19 @@ export const chatSessionApi = {
   },
   getSessionMessages: async (sessionId: string): Promise<{ messages: SessionMessageRecord[] }> => {
     const response = await api.get(`/threads/${sessionId}/messages`)
-    const messages = (response.data.items ?? []).map((item: any) => ({
-      id: item.id,
-      role: item.role,
-      content: item.content,
-      created_time: item.createdAt,
-      citations: [],
-      attachments: [],
-    }))
-    return { messages }
-  },
+      const messages = (response.data.items ?? []).map((item: any) => ({
+        id: item.id,
+        role: item.role,
+        content: item.content,
+        created_time: item.createdAt,
+        citations: item.citations ?? [],
+        attachments: item.attachments ?? [],
+        thoughts: item.thoughts ?? [],
+        steps: item.steps ?? [],
+        runId: item.runId ?? null,
+      }))
+      return { messages }
+    },
   sendMessage: async (
     sessionId: string,
     message: string,
@@ -606,17 +623,28 @@ export const chatSessionApi = {
   ) => {
     let finalEvent: ChatStreamFinalEvent | null = null
     await streamSse<ChatStreamEvent>(
-      `/threads/${sessionId}/messages/stream`,
+      `/threads/${sessionId}/runs/stream`,
       {
-        message,
+        message: _contextText
+          ? `${message || '请基于以下选中文本继续处理。'}\n\nSelected context:\n${_contextText}`
+          : (message || '请结合当前上下文回答。'),
+        mode: _mode,
         model,
         apiBase,
         apiKey,
         history,
+        contextText: _contextText,
+        images: _images,
       },
       {
         onMessage: (event) => {
+          if (event.type === "run_started") {
+            activeRunIdsBySession.set(sessionId, event.runId)
+          }
           if (event.type === "final") finalEvent = event
+          if (event.type === "final" || event.type === "error") {
+            activeRunIdsBySession.delete(sessionId)
+          }
           onEvent?.(event)
         },
       },
@@ -631,9 +659,17 @@ export const chatSessionApi = {
       citations: completedEvent?.citations ?? [],
       steps: completedEvent?.steps ?? [],
       context_used: completedEvent?.context_used ?? {},
+      runId: activeRunIdsBySession.get(sessionId) ?? null,
     }
   },
-  abortAgent: async (_sessionId?: string) => ({ success: true }),
+  abortAgent: async (sessionId?: string) => {
+    if (!sessionId) return { success: false }
+    const runId = activeRunIdsBySession.get(sessionId)
+    if (!runId) return { success: false }
+    const response = await api.post(`/runs/${runId}/abort`)
+    activeRunIdsBySession.delete(sessionId)
+    return response.data
+  },
 }
 
 export const notesApi = {

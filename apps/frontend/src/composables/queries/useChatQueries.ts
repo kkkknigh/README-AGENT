@@ -139,6 +139,8 @@ export function useMessagesQuery(sessionId: Ref<string | null | undefined>) {
                 content: m.content,
                 timestamp: new Date(m.created_time),
                 citations: m.citations || [],
+                thoughts: (m as any).thoughts || [],
+                steps: (m as any).steps || [],
                 images: (m.attachments || [])
                     .filter((att: any) => att?.category === 'image')
                     .map((att: any) => {
@@ -605,6 +607,24 @@ function handleStreamEvent(
 
         const pendingMessage = current[messageIndex]
         if (!pendingMessage) return current
+
+        if (event.type === 'tool_call') {
+            const oldSteps = (pendingMessage.steps || []).map(s => ({ ...s, status: 'done' as const }))
+            current[messageIndex] = {
+                ...pendingMessage,
+                steps: [...oldSteps, { text: `Using ${event.tool}`, status: 'running' as const }],
+            }
+            return current
+        }
+
+        if (event.type === 'tool_result') {
+            const oldSteps = (pendingMessage.steps || []).map(s => ({ ...s, status: 'done' as const }))
+            current[messageIndex] = {
+                ...pendingMessage,
+                steps: [...oldSteps, { text: event.summary || `Completed ${event.tool}`, status: 'done' as const }],
+            }
+            return current
+        }
 
         if (event.type === 'step') {
             const oldSteps = (pendingMessage.steps || []).map(s => ({ ...s, status: 'done' as const }))

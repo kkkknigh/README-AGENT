@@ -134,6 +134,59 @@ CREATE TABLE IF NOT EXISTS local_chat_messages (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS agent_runs (
+  id TEXT PRIMARY KEY,
+  thread_id TEXT NOT NULL REFERENCES local_chat_threads(id) ON DELETE CASCADE,
+  status TEXT NOT NULL,
+  mode TEXT NOT NULL,
+  model TEXT,
+  context_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  finished_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS agent_run_events (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL REFERENCES agent_runs(id) ON DELETE CASCADE,
+  seq INTEGER NOT NULL,
+  event_type TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(run_id, seq)
+);
+
+CREATE TABLE IF NOT EXISTS agent_proposals (
+  id TEXT PRIMARY KEY,
+  run_id TEXT REFERENCES agent_runs(id) ON DELETE SET NULL,
+  thread_id TEXT NOT NULL REFERENCES local_chat_threads(id) ON DELETE CASCADE,
+  session_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  tool_name TEXT NOT NULL,
+  action_type TEXT NOT NULL,
+  action_type_label TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  args_json TEXT NOT NULL,
+  risk_level TEXT NOT NULL,
+  status TEXT NOT NULL,
+  review_comment TEXT,
+  execution_result_json TEXT,
+  created_at TEXT NOT NULL,
+  reviewed_at TEXT,
+  executed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS local_chat_message_meta (
+  message_id TEXT PRIMARY KEY REFERENCES local_chat_messages(id) ON DELETE CASCADE,
+  run_id TEXT REFERENCES agent_runs(id) ON DELETE SET NULL,
+  citations_json TEXT,
+  thoughts_json TEXT,
+  steps_json TEXT,
+  attachments_json TEXT,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS open_tabs (
   id TEXT PRIMARY KEY,
   type TEXT NOT NULL,
@@ -171,6 +224,7 @@ CREATE TABLE IF NOT EXISTS document_chunks (
 CREATE VIRTUAL TABLE IF NOT EXISTS document_chunks_fts USING fts5(
   id UNINDEXED,
   remote_document_id UNINDEXED,
+  page_number UNINDEXED,
   content
 );
 

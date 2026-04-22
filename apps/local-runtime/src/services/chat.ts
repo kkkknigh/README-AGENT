@@ -11,6 +11,14 @@ export function listThreads(): LocalChatThreadDto[] {
   `).all() as LocalChatThreadDto[]
 }
 
+export function getThread(threadId: string) {
+  return db.prepare(`
+    SELECT id, title, scope, workspace_id as workspaceId, document_remote_id as documentRemoteId, created_at as createdAt, updated_at as updatedAt
+    FROM local_chat_threads
+    WHERE id = ?
+  `).get(threadId) as LocalChatThreadDto | undefined
+}
+
 export function createThread(input: {
   title: string
   scope: "global" | "workspace" | "document"
@@ -76,12 +84,41 @@ export function deleteThread(threadId: string) {
 }
 
 export function listMessages(threadId: string): LocalChatMessageDto[] {
-  return db.prepare(`
-    SELECT id, thread_id as threadId, role, content, created_at as createdAt
-    FROM local_chat_messages
-    WHERE thread_id = ?
-    ORDER BY created_at ASC
-  `).all(threadId) as LocalChatMessageDto[]
+  const rows = db.prepare(`
+    SELECT
+      m.id,
+      m.thread_id as threadId,
+      m.role,
+      m.content,
+      m.created_at as createdAt,
+      meta.citations_json as citationsJson,
+      meta.thoughts_json as thoughtsJson,
+      meta.steps_json as stepsJson,
+      meta.attachments_json as attachmentsJson,
+      meta.run_id as runId
+    FROM local_chat_messages m
+    LEFT JOIN local_chat_message_meta meta ON meta.message_id = m.id
+    WHERE m.thread_id = ?
+    ORDER BY m.created_at ASC
+  `).all(threadId) as Array<LocalChatMessageDto & {
+    citationsJson?: string | null
+    thoughtsJson?: string | null
+    stepsJson?: string | null
+    attachmentsJson?: string | null
+  }>
+
+  return rows.map((row) => ({
+    id: row.id,
+    threadId: row.threadId,
+    role: row.role,
+    content: row.content,
+    createdAt: row.createdAt,
+    citations: row.citationsJson ? JSON.parse(row.citationsJson) : [],
+    thoughts: row.thoughtsJson ? JSON.parse(row.thoughtsJson) : [],
+    steps: row.stepsJson ? JSON.parse(row.stepsJson) : [],
+    attachments: row.attachmentsJson ? JSON.parse(row.attachmentsJson) : [],
+    runId: row.runId ?? null,
+  }))
 }
 
 export function createMessage(input: {

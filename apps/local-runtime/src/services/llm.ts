@@ -1,31 +1,15 @@
-import { resolveLlmConfig, type LlmCapability } from "../config.js"
+import {
+  callOpenAiCompatibleChat as callProviderChat,
+  streamOpenAiCompatibleChat as streamProviderChat,
+  type ProviderChatMessage,
+} from "../providers/index.js"
+import type { LlmCapability } from "../config.js"
 
-type MessagePart =
+export type MessagePart =
   | { type: "text"; text: string }
   | { type: "image_url"; image_url: { url: string } }
 
-type ChatMessage = {
-  role: "system" | "user" | "assistant"
-  content: string | MessagePart[]
-}
-
-type ChatCompletionChoice = {
-  message?: {
-    content?: string | Array<{ type?: string; text?: string }>
-  }
-}
-
-function extractContent(choice?: ChatCompletionChoice) {
-  const content = choice?.message?.content
-  if (typeof content === "string") return content
-  if (Array.isArray(content)) {
-    return content
-      .map((item) => item?.text ?? "")
-      .join("")
-      .trim()
-  }
-  return ""
-}
+type ChatMessage = ProviderChatMessage
 
 export async function callOpenAiCompatibleChat(input: {
   capability?: LlmCapability
@@ -35,55 +19,22 @@ export async function callOpenAiCompatibleChat(input: {
   system?: string | null
   messages: ChatMessage[]
   temperature?: number
+  signal?: AbortSignal
 }) {
-  const llm = resolveLlmConfig({
-    capability: input.capability ?? "chat",
-    model: input.model,
-    apiBase: input.apiBase,
-    apiKey: input.apiKey,
-  })
+  return callProviderChat(input)
+}
 
-  if (!llm.apiBase) {
-    throw new Error(`LLM provider "${llm.provider}" is missing apiBase in config.yaml`)
-  }
-
-  if (!llm.apiKey) {
-    throw new Error(`LLM provider "${llm.provider}" is missing apiKey in config.yaml`)
-  }
-
-  if (!llm.model) {
-    throw new Error(`LLM provider "${llm.provider}" is missing model in config.yaml`)
-  }
-
-  const response = await fetch(`${llm.apiBase.replace(/\/$/, "")}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${llm.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: llm.model,
-      messages: [
-        ...(input.system?.trim() ? [{ role: "system", content: input.system.trim() }] : []),
-        ...input.messages,
-      ],
-      temperature: input.temperature ?? 0.2,
-      stream: false,
-    }),
-  })
-
-  if (!response.ok) {
-    const detail = await response.text()
-    throw new Error(`LLM request failed: ${response.status} ${detail}`.trim())
-  }
-
-  const payload = await response.json() as { choices?: ChatCompletionChoice[] }
-  const text = extractContent(payload.choices?.[0])
-
-  return {
-    text,
-    llm,
-  }
+export async function* streamOpenAiCompatibleChat(input: {
+  capability?: LlmCapability
+  model?: string | null
+  apiBase?: string | null
+  apiKey?: string | null
+  system?: string | null
+  messages: ChatMessage[]
+  temperature?: number
+  signal?: AbortSignal
+}) {
+  yield* streamProviderChat(input)
 }
 
 export async function callOpenAiCompatibleVision(input: {
@@ -93,12 +44,14 @@ export async function callOpenAiCompatibleVision(input: {
   apiBase?: string | null
   apiKey?: string | null
   model?: string | null
+  signal?: AbortSignal
 }) {
-  return callOpenAiCompatibleChat({
+  return callProviderChat({
     capability: "vision",
     apiBase: input.apiBase,
     apiKey: input.apiKey,
     model: input.model,
+    signal: input.signal,
     messages: [
       ...(input.history ?? []).map((item) => ({
         role: item.role,

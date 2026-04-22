@@ -2,6 +2,7 @@ import { Router } from "express"
 import { buildParagraphsFromMarkdown, getParsedDocument, inferPageCount, saveParsedDocument } from "../services/document-cache.js"
 import { upsertDocument } from "../services/library.js"
 import { parsePdfFileWithMineru, parseUrlWithMineru } from "../services/mineru.js"
+import { syncDocumentChunks } from "../services/search.js"
 
 export const importRouter = Router()
 
@@ -33,6 +34,7 @@ importRouter.post("/pdf", async (req, res, next) => {
       htmlStatus: "completed",
       metadata: { source: "upload" },
     })
+    syncDocumentChunks(parsed.pdfId, paragraphs)
 
     res.status(202).json({
       pdfId: parsed.pdfId,
@@ -76,6 +78,7 @@ importRouter.post("/link", async (req, res, next) => {
       htmlStatus: "completed",
       metadata: { source: "link", input },
     })
+    syncDocumentChunks(parsed.pdfId, paragraphs)
 
     res.status(202).json({
       importTaskId: `import-${parsed.pdfId}`,
