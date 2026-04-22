@@ -21,6 +21,11 @@ const router = createRouter({
       component: workbench,
     },
     {
+      path: "/profile",
+      name: "profile",
+      component: workbench,
+    },
+    {
       path: "/tag-graph",
       name: "tag-graph",
       component: workbench,
@@ -32,11 +37,6 @@ const router = createRouter({
     {
       path: "/register",
       redirect: "/",
-    },
-    {
-      path: "/profile",
-      name: "profile",
-      component: () => import("../layouts/ProfileLayout.vue"),
     },
     {
       path: "/admin",

@@ -52,12 +52,15 @@ import InternalLinkPopup from './InternalLinkPopup.vue'
 import { useHighlightsQuery } from '../../composables/queries/useHighlightQueries'
 import { useDocumentsQuery } from '../../composables/queries/useLibraryQueries'
 import { trackEvent, flushEvents } from '../../utils/tracking'
+import WorkbenchEmptyState from '../common/WorkbenchEmptyState.vue'
+import { useWorkbenchStore } from '../../stores/workbench'
 
 GlobalWorkerOptions.workerSrc = pdfWorker
 
 // ------------------------- 初始化 store 实例 -------------------------
 const pdfStore = usePdfStore() 
 const translationStore = useTranslationStore()
+const workbenchStore = useWorkbenchStore()
 
 // ------------------------- 初始化 PDF 状态与引用 -------------------------
 const containerRef = ref<HTMLElement | null>(null) 
@@ -378,7 +381,7 @@ function getPageTranslationSidebarParagraphs(page: number) {
 
 function getPageTranslationSidebarWidth(page: number) {
   const pageSize = getScaledPageSize(page, pdfStore.scale, pageSizesConstant.value, pageSizesArray.value)
-  return Math.round(pageSize.width / 2)
+  return clamp(Math.round(pageSize.width * 0.38), 320, 400)
 }
 
 function getPageRowStyle(page: number) {
@@ -1154,12 +1157,14 @@ watch(
     // immediate 首次触发时 oldUrl 为 undefined，不需要关闭面板
     if (oldUrl) {
       pdfStore.showFullTranslationSidebar = false
+      translationStore.closeAllPanels()
     }
 
     if (url) {
       loadPdf(url)
     } else {
       cleanup()
+      translationStore.closeAllPanels()
     }
   },
   { immediate: true }
@@ -1688,13 +1693,15 @@ onBeforeUnmount(() => {
 
     <div
       v-else
-      class="flex-1 flex flex-col items-center justify-center text-gray-400"
+      class="pdf-viewer__empty-state"
     >
-      <svg class="w-24 h-24 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-      </svg>
-      <h2 class="text-xl font-medium mb-2">Start Reading</h2>
-      <p class="text-sm">Upload a PDF from the left sidebar to begin.</p>
+      <WorkbenchEmptyState
+        eyebrow="Reader"
+        title="No document open"
+        description="Open the library or upload a document to start reading in the editor."
+        primary-label="Upload Document"
+        @primary="window.dispatchEvent(new CustomEvent('workbench-open-upload'))"
+      />
     </div>
 
     <TextSelectionTooltip
@@ -1715,6 +1722,11 @@ onBeforeUnmount(() => {
 <style scoped>
 .pdf-page-row {
   align-items: stretch;
+}
+
+.pdf-viewer__empty-state {
+  flex: 1;
+  min-height: 0;
 }
 
 .pdf-page {

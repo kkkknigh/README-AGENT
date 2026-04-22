@@ -105,7 +105,6 @@ onBeforeUnmount(() => {
 
 .document-reader-tab__toolbar {
   background: var(--c-bg-elevated);
-  border-bottom: var(--border-width) solid var(--c-border-light);
 }
 
 .document-reader-tab__content {
@@ -125,12 +124,10 @@ onBeforeUnmount(() => {
   background:
     linear-gradient(
       180deg,
-      transparent 0,
-      transparent 2px,
-      var(--c-border-light) 2px,
-      var(--c-border-light) 4px,
-      transparent 4px,
-      transparent 100%
+      transparent calc(50% - 0.5px),
+      var(--c-border-light) calc(50% - 0.5px),
+      var(--c-border-light) calc(50% + 0.5px),
+      transparent calc(50% + 0.5px)
     );
 }
 

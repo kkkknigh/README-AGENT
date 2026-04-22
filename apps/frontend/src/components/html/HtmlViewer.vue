@@ -17,6 +17,7 @@ import '../../styles/arxiv-compat.css'
 import { useHtmlReflowStore } from '../../stores/html-reflow'
 import { useTranslationStore } from '../../stores/translation'
 import { usePdfStore } from '../../stores/pdf'
+import WorkbenchEmptyState from '../common/WorkbenchEmptyState.vue'
 
 const htmlReflowStore = useHtmlReflowStore()
 const translationStore = useTranslationStore()
@@ -579,18 +580,39 @@ function adjustFontSize(delta: number) {
   fontSize.value = Math.max(12, Math.min(24, fontSize.value + delta))
 }
 
+async function retryHtmlLoad() {
+  const pdfId = pdfStore.activeReaderId
+  if (!pdfId) return
+  await htmlReflowStore.requestHtml(pdfId)
+}
+
+function returnToPdf() {
+  htmlReflowStore.viewMode = 'pdf'
+}
+
 defineExpose({ adjustFontSize })
 </script>
 
 <template>
   <div class="html-viewer" :style="{ fontSize: fontSize + 'px' }">
     <div v-if="htmlReflowStore.htmlStatus === 'loading'" class="html-viewer__loading">
-      <div class="loading-spinner" />
-      <span class="loading-text">Loading HTML...</span>
+      <WorkbenchEmptyState
+        eyebrow="HTML View"
+        title="Loading HTML view"
+        description="Generating a readable HTML reflow for the current document."
+      />
     </div>
 
     <div v-else-if="htmlReflowStore.htmlStatus === 'error'" class="html-viewer__error">
-      <span>Failed to load HTML content</span>
+      <WorkbenchEmptyState
+        eyebrow="HTML View"
+        title="HTML view failed"
+        description="Switch back to the PDF or retry HTML generation for this document."
+        primary-label="Back to PDF"
+        secondary-label="Retry HTML"
+        @primary="returnToPdf"
+        @secondary="retryHtmlLoad"
+      />
     </div>
 
     <div
@@ -601,7 +623,15 @@ defineExpose({ adjustFontSize })
     />
 
     <div v-else class="html-viewer__empty">
-      <span>No HTML content available</span>
+      <WorkbenchEmptyState
+        eyebrow="HTML View"
+        title="No HTML content"
+        description="This document does not have an HTML reflow yet. Return to the PDF or try generating it again."
+        primary-label="Back to PDF"
+        secondary-label="Retry HTML"
+        @primary="returnToPdf"
+        @secondary="retryHtmlLoad"
+      />
     </div>
   </div>
 </template>

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useMarkdownRenderer } from '../../composables/useMarkdownRenderer'
 import { useTranslationStore } from '../../stores/translation'
+import WorkbenchEmptyState from '../common/WorkbenchEmptyState.vue'
 
 type PageSidebarParagraph = {
   id: string
@@ -25,7 +26,6 @@ const translationStore = useTranslationStore()
 
 const translatedParagraphs = computed(() => props.paragraphs.filter((item) => item.translation.trim().length > 0))
 
-// 基准 scale=1.5 对应 15px，字体随页面缩放等比变化
 const scaledFontSize = computed(() => {
   const base = 15
   const ratio = (props.scale ?? 1.5) / 1.5
@@ -33,44 +33,46 @@ const scaledFontSize = computed(() => {
 })
 
 const statusMeta = computed(() => {
-  if (props.pageStatus === 'pending') return { label: '排队中', tone: 'popup-badge--idle' }
-  if (props.pageStatus === 'loading') return { label: '翻译中', tone: 'popup-badge--loading' }
-  if (props.pageStatus === 'success') return { label: '已完成', tone: 'popup-badge--success' }
-  if (props.pageStatus === 'failed') return { label: '失败', tone: 'popup-badge--error' }
-  if (props.fullStatus === 'loading') return { label: '等待中', tone: 'popup-badge--idle' }
-  return { label: '未开始', tone: 'popup-badge--idle' }
+  if (props.pageStatus === 'pending') return { label: 'Queued', tone: 'popup-badge--idle' }
+  if (props.pageStatus === 'loading') return { label: 'Loading', tone: 'popup-badge--loading' }
+  if (props.pageStatus === 'success') return { label: 'Ready', tone: 'popup-badge--success' }
+  if (props.pageStatus === 'failed') return { label: 'Failed', tone: 'popup-badge--error' }
+  if (props.fullStatus === 'loading') return { label: 'Waiting', tone: 'popup-badge--idle' }
+  return { label: 'Idle', tone: 'popup-badge--idle' }
+})
+
+const emptyStateTitle = computed(() => {
+  if (props.pageStatus === 'failed') return 'No page translation'
+  if (props.pageStatus === 'success') return 'Nothing to display'
+  if (props.pageStatus === 'loading' || props.pageStatus === 'pending' || props.fullStatus === 'loading') {
+    return 'Translation in progress'
+  }
+  return 'No page translation yet'
 })
 
 const emptyStateText = computed(() => {
-  if (props.pageStatus === 'pending') return '本页已进入待翻译队列，等待发送请求。'
-  if (props.pageStatus === 'loading') return '正在生成本页译文...'
-  if (props.pageStatus === 'success') return '本页翻译已完成，但当前页没有可展示的译文。'
-  if (props.pageStatus === 'failed') return '本页翻译失败，请重新尝试。'
-  if (props.fullStatus === 'loading') return '全文翻译已开始，正在等待排到本页。'
-  return '本页还没有译文。'
+  if (props.pageStatus === 'pending') return 'This page is queued for translation and waiting to be processed.'
+  if (props.pageStatus === 'loading') return 'Generating translated content for this page.'
+  if (props.pageStatus === 'success') return 'Translation finished, but there is no translatable content on this page.'
+  if (props.pageStatus === 'failed') return 'Translation failed for this page. Try again from the reader toolbar.'
+  if (props.fullStatus === 'loading') return 'Full-document translation is running. This page has not been processed yet.'
+  return 'There is no translated content for this page yet.'
 })
 
-// 处理滚轮事件：内部滚到头后允许冒泡给外部 PDF 翻页
-const handleWheel = (e: WheelEvent) => {
-  // 双指缩放 → 交给父容器
-  if (e.ctrlKey || e.metaKey) return
+const handleWheel = (event: WheelEvent) => {
+  if (event.ctrlKey || event.metaKey) return
+  if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return
 
-  // 水平滚动 → 交给父容器
-  if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return
+  const element = event.currentTarget as HTMLElement | null
+  if (!element) return
 
-  // 垂直滚动：检查内部是否还能滚
-  const el = e.currentTarget as HTMLElement
-  if (!el) return
+  const { scrollTop, scrollHeight, clientHeight } = element
+  const atTop = scrollTop <= 0 && event.deltaY < 0
+  const atBottom = scrollTop + clientHeight >= scrollHeight - 1 && event.deltaY > 0
 
-  const { scrollTop, scrollHeight, clientHeight } = el
-  const atTop = scrollTop <= 0 && e.deltaY < 0
-  const atBottom = scrollTop + clientHeight >= scrollHeight - 1 && e.deltaY > 0
-
-  // 还没滚到头 → 内部消化，不冒泡
   if (!atTop && !atBottom) {
-    e.stopPropagation()
+    event.stopPropagation()
   }
-  // 滚到头了 → 不 stopPropagation，让外部 PDF 容器接管
 }
 </script>
 
@@ -86,7 +88,7 @@ const handleWheel = (e: WheelEvent) => {
     <div class="page-translation-sidebar__header popup-header">
       <div>
         <div class="page-translation-sidebar__eyebrow popup-label">Page {{ page }}</div>
-        <div class="page-translation-sidebar__title popup-title">本页译文</div>
+        <div class="page-translation-sidebar__title popup-title">Page Translation</div>
       </div>
       <span class="page-translation-sidebar__badge popup-badge" :class="statusMeta.tone">
         {{ statusMeta.label }}
@@ -94,10 +96,9 @@ const handleWheel = (e: WheelEvent) => {
     </div>
 
     <div class="page-translation-sidebar__body popup-scroll" :style="{ fontSize: scaledFontSize }" @wheel="handleWheel">
-      <!-- 缩放时显示加载动画 -->
       <div v-if="isZooming" class="page-translation-sidebar__loading">
         <div class="page-translation-sidebar__spinner"></div>
-        <span class="page-translation-sidebar__loading-text">加载中...</span>
+        <span class="page-translation-sidebar__loading-text">Refreshing layout...</span>
       </div>
 
       <template v-else-if="translatedParagraphs.length">
@@ -117,9 +118,13 @@ const handleWheel = (e: WheelEvent) => {
         </div>
       </template>
 
-      <div v-else class="page-translation-sidebar__empty">
-        {{ emptyStateText }}
-      </div>
+      <WorkbenchEmptyState
+        v-else
+        compact
+        eyebrow="Page Translation"
+        :title="emptyStateTitle"
+        :description="emptyStateText"
+      />
     </div>
   </aside>
 </template>
@@ -162,14 +167,12 @@ const handleWheel = (e: WheelEvent) => {
   padding: var(--popup-padding);
 }
 
-/* 段落无边框无分隔，像连续页面一样流动 */
 .page-translation-sidebar__paragraph {
   padding: 4px 8px;
   border-radius: var(--radius-md);
   transition: background-color 0.25s ease;
 }
 
-/* 悬停高亮：柔和背景色 */
 .page-translation-sidebar__paragraph.is-hovered {
   background-color: rgba(80, 140, 255, 0.08);
 }
@@ -220,17 +223,6 @@ const handleWheel = (e: WheelEvent) => {
   height: auto;
 }
 
-.page-translation-sidebar__empty {
-  padding: calc(var(--popup-padding) + 4px) var(--popup-padding);
-  border: var(--border-width) dashed var(--c-border-input);
-  border-radius: var(--radius-xl);
-  background: var(--c-bg-secondary);
-  font-size: var(--popup-text-size);
-  line-height: var(--popup-line-height);
-  color: var(--c-text-tertiary);
-}
-
-/* 缩放时加载动画 - 与PDF未加载页面的加载动画一致 */
 .page-translation-sidebar__loading {
   display: flex;
   flex-direction: column;

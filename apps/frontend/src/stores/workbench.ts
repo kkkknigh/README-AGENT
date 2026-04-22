@@ -19,7 +19,7 @@ const AUX_MIN = 320
 const AUX_MAX = 560
 const NOTES_MIN = 140
 const NOTES_MAX = 320
-const LAYOUT_STORAGE_KEY = "readme_workbench_layout_v2"
+const LAYOUT_STORAGE_KEY = "readme_workbench_layout_v3"
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
@@ -73,7 +73,7 @@ function loadLayoutState(): WorkbenchLayoutState {
     sidebarVisible: true,
     sidebarWidth: 300,
     lastExpandedSidebarWidth: 300,
-    auxPanelVisible: true,
+    auxPanelVisible: false,
     auxPanelWidth: 420,
     lastExpandedAuxPanelWidth: 420,
     notesPaneVisible: true,
@@ -171,6 +171,9 @@ export const useWorkbenchStore = defineStore("workbench", () => {
     openTabs.value = response.items.map(toTab).filter((tab): tab is WorkbenchTab<PersistedWorkbenchTabType> => tab !== null)
     activeTabId.value = openTabs.value[openTabs.value.length - 1]?.id ?? null
     isHydrated.value = true
+    if (response.items.length !== openTabs.value.length) {
+      schedulePersist()
+    }
   }
 
   function setActiveActivity(activity: ActivityId) {

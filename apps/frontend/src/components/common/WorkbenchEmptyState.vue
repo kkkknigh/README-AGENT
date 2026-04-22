@@ -45,6 +45,7 @@ const emit = defineEmits<{
 
 <style scoped>
 .empty-state {
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;

@@ -28,7 +28,6 @@ const MIN_WIDTH = 280
 const MAX_WIDTH = 900
 const MIN_HEIGHT = 150
 const MAX_HEIGHT = 600
-const SIDEBAR_SNAP_THRESHOLD = 100
 const PARAGRAPH_SNAP_THRESHOLD = 150
 const SNAP_MIN_HEIGHT = 40
 const MIN_FONT_SIZE = 8
@@ -45,7 +44,6 @@ const resizingPanelId = ref<string | null>(null)
 const isNearSnapTarget = ref(false)
 const snapTargetRect = ref<{ left: number; top: number; width: number; height: number } | null>(null)
 const snapTargetParagraphId = ref<string | null>(null)
-const isNearSidebar = ref(false)
 
 // 字体大小映射
 const fontSizeDeltaMap: Record<string, number> = {}
@@ -112,9 +110,8 @@ function getParagraphSnapRect(
 // 计算属性：合并显示所有面板
 // ===========================================
 const visiblePanels = computed(() => {
-  // 1. 获取所有未停靠到侧边栏的段落翻译面板
-  const panels: Array<TranslationPanelInstance & { isTextPanel?: boolean }> = 
-    translationStore.translationPanels.filter(p => !p.isSidebarDocked).map(p => ({ ...p, isTextPanel: false }))
+  const panels: Array<TranslationPanelInstance & { isTextPanel?: boolean }> =
+    translationStore.translationPanels.map(p => ({ ...p, isTextPanel: false }))
   
   // 2. 如果划词翻译开启，追加划词翻译面板
   if (translationStore.showTextTranslation) {
@@ -125,10 +122,9 @@ const visiblePanels = computed(() => {
       size: textPanelSize.value,
       translation: translationStore.textTranslationResult || (translationStore.isTextTranslating ? '' : '暂无翻译'),
       isLoading: translationStore.isTextTranslating,
-      originalText: '', 
+      originalText: '',
       snapMode: 'none',
       snapTargetParagraphId: null,
-      isSidebarDocked: false,
       isTextPanel: true
     })
   }
@@ -346,6 +342,24 @@ function getAllParagraphRects() {
   return results
 }
 
+function clampToViewport(position: { x: number; y: number }, size: { width: number; height: number }) {
+  const maxX = Math.max(0, window.innerWidth - size.width)
+  const maxY = Math.max(0, window.innerHeight - size.height)
+  return {
+    x: clamp(position.x, 0, maxX),
+    y: clamp(position.y, 0, maxY),
+  }
+}
+
+function clampAllPanelsToViewport() {
+  translationStore.updateTextPanelPosition(clampToViewport(translationStore.textPanelPosition, textPanelSize.value))
+
+  translationStore.translationPanels.forEach((panel) => {
+    if (panel.snapMode === 'paragraph') return
+    translationStore.updatePanelPosition(panel.id, clampToViewport(panel.position, panel.size))
+  })
+}
+
 const { startDrag: initDrag, setPosition: setDragPosition } = useDraggableWindow({
   onDrag: (newPos) => {
     if (!draggingPanelId.value) return
@@ -353,14 +367,8 @@ const { startDrag: initDrag, setPosition: setDragPosition } = useDraggableWindow
 
     // --- 1. 划词翻译面板处理 ---
     if (currentId === TEXT_PANEL_ID) {
-       const maxX = window.innerWidth - textPanelSize.value.width
-       const maxY = window.innerHeight - textPanelSize.value.height
-       translationStore.updateTextPanelPosition({
-          x: clamp(newPos.x, 0, maxX),
-          y: clamp(newPos.y, 0, maxY)
-       })
-       // 划词翻译不参与吸附逻辑
-       return
+      translationStore.updateTextPanelPosition(clampToViewport(newPos, textPanelSize.value))
+      return
     }
 
     // --- 2. 段落翻译面板处理 ---
@@ -370,130 +378,101 @@ const { startDrag: initDrag, setPosition: setDragPosition } = useDraggableWindow
       return
     }
     
-    // 吸附检测逻辑
-    const distanceToRight = window.innerWidth - (newPos.x + panel.size.width)
-    isNearSidebar.value = distanceToRight < SIDEBAR_SNAP_THRESHOLD
-    
-    if (!isNearSidebar.value) {
-      // 优先恢复“吸附回本段”的旧行为，避免 bbox 轻微偏差时完全吸不到
-      if (panel.paragraphId) {
-        const ownSnapRect = calculateParagraphSnapPosition(panel.paragraphId)
-        if (ownSnapRect) {
-          const panelCx = newPos.x + panel.size.width / 2
-          const panelCy = newPos.y + panel.size.height / 2
-          const ownCx = ownSnapRect.left + ownSnapRect.width / 2
-          const ownCy = ownSnapRect.top + ownSnapRect.height / 2
-          const ownDistance = Math.hypot(panelCx - ownCx, panelCy - ownCy)
-          const insideOwnRect =
-            panelCx >= ownSnapRect.left &&
-            panelCx <= ownSnapRect.left + ownSnapRect.width &&
-            panelCy >= ownSnapRect.top &&
-            panelCy <= ownSnapRect.top + ownSnapRect.height
+    if (panel.paragraphId) {
+      const ownSnapRect = calculateParagraphSnapPosition(panel.paragraphId)
+      if (ownSnapRect) {
+        const panelCx = newPos.x + panel.size.width / 2
+        const panelCy = newPos.y + panel.size.height / 2
+        const ownCx = ownSnapRect.left + ownSnapRect.width / 2
+        const ownCy = ownSnapRect.top + ownSnapRect.height / 2
+        const ownDistance = Math.hypot(panelCx - ownCx, panelCy - ownCy)
+        const insideOwnRect =
+          panelCx >= ownSnapRect.left &&
+          panelCx <= ownSnapRect.left + ownSnapRect.width &&
+          panelCy >= ownSnapRect.top &&
+          panelCy <= ownSnapRect.top + ownSnapRect.height
 
-          if (insideOwnRect || ownDistance < PARAGRAPH_SNAP_THRESHOLD + 40) {
-            isNearSnapTarget.value = true
-            snapTargetParagraphId.value = panel.paragraphId
-            snapTargetRect.value = {
-              left: ownSnapRect.left,
-              top: ownSnapRect.top,
-              width: ownSnapRect.width,
-              height: ownSnapRect.height
-            }
-          } else {
-            isNearSnapTarget.value = false
-            snapTargetParagraphId.value = null
-            snapTargetRect.value = null
+        if (insideOwnRect || ownDistance < PARAGRAPH_SNAP_THRESHOLD + 40) {
+          isNearSnapTarget.value = true
+          snapTargetParagraphId.value = panel.paragraphId
+          snapTargetRect.value = {
+            left: ownSnapRect.left,
+            top: ownSnapRect.top,
+            width: ownSnapRect.width,
+            height: ownSnapRect.height
           }
+        } else {
+          isNearSnapTarget.value = false
+          snapTargetParagraphId.value = null
+          snapTargetRect.value = null
         }
       }
+    }
 
-      if (isNearSnapTarget.value && snapTargetRect.value) {
-        // 已命中当前段落，不再继续扫描全局 paragraph
-      } else {
-      // 检测附近段落
+    if (!(isNearSnapTarget.value && snapTargetRect.value)) {
       const allParagraphs = getAllParagraphRects()
       let nearest: { id: string; distance: number; rect: { left: number; top: number; width: number; height: number } } | null = null
-      
+
       const panelCx = newPos.x + panel.size.width / 2
       const panelCy = newPos.y + panel.size.height / 2
 
       for (const p of allParagraphs) {
-        // 优先判断：面板中心点是否落在段落矩形内部
-        const isInside = 
-          panelCx >= p.rect.left && 
+        const isInside =
+          panelCx >= p.rect.left &&
           panelCx <= p.rect.left + p.rect.width &&
           panelCy >= p.rect.top &&
           panelCy <= p.rect.top + p.rect.height
 
         if (isInside) {
           nearest = { id: p.id, distance: 0, rect: p.rect }
-          break // 找到直接吸附的目标
+          break
         }
 
-        // 备选逻辑：计算中心点距离
         const markerCx = p.rect.left + p.rect.width / 2
         const markerCy = p.rect.top + p.rect.height / 2
-        
         const dist = Math.hypot(panelCx - markerCx, panelCy - markerCy)
+
         if (dist < PARAGRAPH_SNAP_THRESHOLD) {
-           if (!nearest || (nearest.distance > 0 && dist < nearest.distance)) {
-             nearest = { id: p.id, distance: dist, rect: p.rect }
-           }
+          if (!nearest || (nearest.distance > 0 && dist < nearest.distance)) {
+            nearest = { id: p.id, distance: dist, rect: p.rect }
+          }
         }
       }
 
       if (nearest) {
         isNearSnapTarget.value = true
         snapTargetParagraphId.value = nearest.id
-        // 直接使用已经算好的 rect，避免二次计算
         snapTargetRect.value = nearest.rect
       } else {
         isNearSnapTarget.value = false
         snapTargetParagraphId.value = null
         snapTargetRect.value = null
       }
-      }
-    } else {
-      isNearSnapTarget.value = false
-      snapTargetParagraphId.value = null
-      snapTargetRect.value = null
     }
 
-    // 限制在窗口内并更新 store
-    const maxX = window.innerWidth - panel.size.width
-    const maxY = window.innerHeight - panel.size.height
-    translationStore.updatePanelPosition(currentId, {
-      x: clamp(newPos.x, 0, maxX),
-      y: clamp(newPos.y, 0, maxY)
-    })
+    translationStore.updatePanelPosition(currentId, clampToViewport(newPos, panel.size))
   },
   onDragEnd: () => {
     if (draggingPanelId.value && draggingPanelId.value !== TEXT_PANEL_ID) {
-        // 应用吸附 / 停靠
-        if (isNearSidebar.value) {
-            translationStore.setPanelSnapMode(draggingPanelId.value, 'sidebar')
-        } else if (isNearSnapTarget.value && snapTargetRect.value && snapTargetParagraphId.value) {
-             translationStore.setPanelSnapMode(draggingPanelId.value, 'paragraph', snapTargetParagraphId.value)
-             translationStore.updatePanelPosition(draggingPanelId.value, {
-                 x: snapTargetRect.value.left,
-                 y: snapTargetRect.value.top
-             })
-             translationStore.updatePanelSize(draggingPanelId.value, {
-                 width: clamp(snapTargetRect.value.width, MIN_WIDTH, MAX_WIDTH),
-                 height: clamp(snapTargetRect.value.height, SNAP_MIN_HEIGHT, MAX_HEIGHT)
-             })
-             // 吸附后自适应字体大小
-             const snapPanelId = draggingPanelId.value
-             nextTick(() => fitFontSizeForPanel(snapPanelId))
-        } else {
-            // 非吸附状态清除自适应字号
-            delete autoFitFontSizeMap.value[draggingPanelId.value]
-        }
+      if (isNearSnapTarget.value && snapTargetRect.value && snapTargetParagraphId.value) {
+        translationStore.setPanelSnapMode(draggingPanelId.value, 'paragraph', snapTargetParagraphId.value)
+        translationStore.updatePanelPosition(draggingPanelId.value, {
+          x: snapTargetRect.value.left,
+          y: snapTargetRect.value.top
+        })
+        translationStore.updatePanelSize(draggingPanelId.value, {
+          width: clamp(snapTargetRect.value.width, MIN_WIDTH, MAX_WIDTH),
+          height: clamp(snapTargetRect.value.height, SNAP_MIN_HEIGHT, MAX_HEIGHT)
+        })
+        const snapPanelId = draggingPanelId.value
+        nextTick(() => fitFontSizeForPanel(snapPanelId))
+      } else {
+        delete autoFitFontSizeMap.value[draggingPanelId.value]
+      }
     }
-    // 閲嶇疆鐘舵€?
+
     draggingPanelId.value = null
     isNearSnapTarget.value = false
-    isNearSidebar.value = false
     snapTargetRect.value = null
     snapTargetParagraphId.value = null
   }
@@ -533,15 +512,15 @@ const { startResize: initResize, setSize: setResizeSize } = useResizableWindow({
 
     // 1. 划词翻译面板
     if (id === TEXT_PANEL_ID) {
-        textPanelSize.value = size
-        if (delta.x !== 0 || delta.y !== 0) {
-            const curPos = translationStore.textPanelPosition
-            translationStore.updateTextPanelPosition({
-                x: curPos.x + delta.x,
-                y: curPos.y + delta.y
-            })
-        }
-        return
+      textPanelSize.value = size
+      if (delta.x !== 0 || delta.y !== 0) {
+        const curPos = translationStore.textPanelPosition
+        translationStore.updateTextPanelPosition(clampToViewport({
+          x: curPos.x + delta.x,
+          y: curPos.y + delta.y
+        }, size))
+      }
+      return
     }
 
     // 2. 段落翻译面板
@@ -553,14 +532,15 @@ const { startResize: initResize, setSize: setResizeSize } = useResizableWindow({
 
     translationStore.updatePanelSize(id, size)
     if (delta.x !== 0 || delta.y !== 0) {
-       translationStore.updatePanelPosition(id, {
+      translationStore.updatePanelPosition(id, clampToViewport({
         x: panel.position.x + delta.x,
         y: panel.position.y + delta.y
-      })
+      }, size))
     }
   },
   onResizeEnd: () => {
     resizingPanelId.value = null
+    clampAllPanelsToViewport()
   }
 })
 
@@ -643,11 +623,12 @@ function bindScrollListener() {
 watch(() => pdfStore.scale, () => {
   nextTick(() => {
     updateSnappedPanelPositions()
+    clampAllPanelsToViewport()
     debouncedFitAll()
   })
 })
 
-watch(() => pdfStore.currentPdfUrl, () => {
+watch(() => pdfStore.currentPdfUrl, (_url, oldUrl) => {
   if (pdfContainerRef) {
     pdfContainerRef.removeEventListener('scroll', onPdfScroll)
     if (resizeObserver) {
@@ -657,11 +638,16 @@ watch(() => pdfStore.currentPdfUrl, () => {
     pdfContainerRef = null
   }
   bindRetryCount = 0
+  if (oldUrl) {
+    translationStore.closeAllPanels()
+  }
   setTimeout(bindScrollListener, 200)
 }, { immediate: true })
 
 onMounted(() => {
   setTimeout(bindScrollListener, 200)
+  window.addEventListener('resize', clampAllPanelsToViewport)
+  nextTick(() => clampAllPanelsToViewport())
 })
 
 onBeforeUnmount(() => {
@@ -676,6 +662,7 @@ onBeforeUnmount(() => {
   if (scrollRafId) {
     cancelAnimationFrame(scrollRafId)
   }
+  window.removeEventListener('resize', clampAllPanelsToViewport)
 })
 </script>
 
@@ -694,14 +681,6 @@ onBeforeUnmount(() => {
     <div class="snap-hint-text">释放以吸附</div>
   </div>
   
-  <!-- 侧边栏吸附提示 -->
-  <div
-    v-if="draggingPanelId && draggingPanelId !== TEXT_PANEL_ID && isNearSidebar"
-    class="sidebar-snap-hint fixed z-[998] pointer-events-none right-0 top-0 bottom-0 w-16"
-  >
-    <div class="sidebar-hint-text">停靠到侧边栏</div>
-  </div>
-
   <!-- 渲染所有翻译面板 -->
   <template v-for="(panel, index) in visiblePanels" :key="panel.id">
     <div
@@ -810,14 +789,11 @@ onBeforeUnmount(() => {
         ></div>
       </div>
       
-      <!-- 调整大小的边框（TextPanel 也允许调整） -->
-      <template v-if="!panel.isSidebarDocked">
-        <div class="resize-handle resize-w" @mousedown="startResize($event, panel.id, 'w')"></div>
-        <div class="resize-handle resize-e" @mousedown="startResize($event, panel.id, 'e')"></div>
-        <div class="resize-handle resize-s" @mousedown="startResize($event, panel.id, 's')"></div>
-        <div class="resize-handle resize-sw" @mousedown="startResize($event, panel.id, 'sw')"></div>
-        <div class="resize-handle resize-se" @mousedown="startResize($event, panel.id, 'se')"></div>
-      </template>
+      <div class="resize-handle resize-w" @mousedown="startResize($event, panel.id, 'w')"></div>
+      <div class="resize-handle resize-e" @mousedown="startResize($event, panel.id, 'e')"></div>
+      <div class="resize-handle resize-s" @mousedown="startResize($event, panel.id, 's')"></div>
+      <div class="resize-handle resize-sw" @mousedown="startResize($event, panel.id, 'sw')"></div>
+      <div class="resize-handle resize-se" @mousedown="startResize($event, panel.id, 'se')"></div>
     </div>
   </template>
 </template>
@@ -873,20 +849,5 @@ onBeforeUnmount(() => {
   box-shadow: 0 2px 8px rgba(30, 58, 95, 0.35);
 }
 
-.sidebar-snap-hint {
-  background: linear-gradient(to left, rgba(30, 58, 95, 0.15), transparent);
-  border-left: var(--border-width-2) dashed var(--c-accent-light);
-}
-
-.sidebar-hint-text {
-  position: absolute; top: 50%; right: var(--space-4);
-  transform: translateY(-50%) rotate(-90deg);
-  padding: var(--space-1) var(--space-3);
-  background: rgba(30, 58, 95, 0.92);
-  color: var(--c-text-on-accent);
-  font-size: var(--popup-muted-size); font-weight: var(--font-medium);
-  border-radius: var(--radius-sm); white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(30, 58, 95, 0.35);
-}
 </style>
 

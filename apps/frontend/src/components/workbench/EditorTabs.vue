@@ -14,17 +14,23 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="editor-tabs">
+  <div class="editor-tabs" role="tablist" aria-label="Editor tabs">
     <div v-if="tabs.length === 0" class="editor-tabs__empty">No open editors</div>
-    <button
+    <div
       v-for="tab in tabs"
       :key="tab.id"
       class="editor-tabs__item"
       :class="{ 'editor-tabs__item--active': tab.id === activeTabId }"
-      @click="emit('activate', tab.id)"
-      @auxclick="(event) => event.button === 1 ? emit('close', tab.id) : null"
+      role="tab"
+      :aria-selected="tab.id === activeTabId"
     >
+      <button
+        class="editor-tabs__trigger"
+        @click="emit('activate', tab.id)"
+        @auxclick="(event) => event.button === 1 ? emit('close', tab.id) : null"
+      >
       <span class="editor-tabs__label">{{ tab.title }}</span>
+      </button>
       <button
         class="editor-tabs__close"
         title="Close"
@@ -44,12 +50,14 @@ const emit = defineEmits<{
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6h.01M12 12h.01M12 18h.01" />
         </svg>
       </button>
-    </button>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .editor-tabs {
+  width: 100%;
+  min-width: 0;
   height: 40px;
   display: flex;
   align-items: stretch;
@@ -59,6 +67,8 @@ const emit = defineEmits<{
 }
 
 .editor-tabs__empty {
+  flex: 1;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   padding: 0 14px;
@@ -88,6 +98,16 @@ const emit = defineEmits<{
 .editor-tabs__item--active {
   background: var(--c-bg-primary);
   color: var(--c-text-primary);
+}
+
+.editor-tabs__trigger {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
+  color: inherit;
 }
 
 .editor-tabs__label {
