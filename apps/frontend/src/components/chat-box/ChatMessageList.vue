@@ -22,44 +22,42 @@ const emit = defineEmits<{
   (e: 'proposal-reject', id: string): void
 }>()
 
-const { tooltipState, renderMarkdown, handleMessageMouseOver, handleMessageMouseOut, handleMessageClick, handleTooltipEnter, handleTooltipLeave } = useMarkdownRenderer()
+const {
+  tooltipState,
+  renderMarkdown,
+  handleMessageMouseOver,
+  handleMessageMouseOut,
+  handleMessageClick,
+  handleTooltipEnter,
+  handleTooltipLeave,
+} = useMarkdownRenderer()
 
 const messagesContainer = ref<HTMLElement | null>(null)
 const editingIndex = ref<number | null>(null)
 const editValue = ref('')
 
-// --- 思考块折叠状态： key 为 message.id，只在内存中保存，不持久化 ---
 const thinkingExpanded = ref<Record<string, boolean>>({})
+const stepsExpanded = ref<Record<string, boolean>>({})
 
 const isThinkingExpanded = (id: string) => thinkingExpanded.value[id] ?? true
+const isStepsExpanded = (id: string) => stepsExpanded.value[id] ?? true
 
 const toggleThinking = (id: string) => {
   thinkingExpanded.value[id] = !isThinkingExpanded(id)
 }
 
-// final（content 非空）到达后自动折叠思考块
-watch(() => props.messages, (msgs) => {
-  msgs.forEach(m => {
-    if (m.role === 'assistant' && m.thoughts?.length && m.content && !(m.id in thinkingExpanded.value)) {
-      thinkingExpanded.value[m.id] = false
-    }
-  })
-}, { deep: true })
-
-// --- 步骤块折叠状态（与思考块相同模式）---
-const stepsExpanded = ref<Record<string, boolean>>({})
-
-const isStepsExpanded = (id: string) => stepsExpanded.value[id] ?? true
-
 const toggleSteps = (id: string) => {
   stepsExpanded.value[id] = !isStepsExpanded(id)
 }
 
-// content 非空后自动折叠步骤块
 watch(() => props.messages, (msgs) => {
-  msgs.forEach(m => {
-    if (m.role === 'assistant' && m.steps?.length && m.content && !(m.id in stepsExpanded.value)) {
-      stepsExpanded.value[m.id] = false
+  msgs.forEach((message) => {
+    if (message.role === 'assistant' && message.thoughts?.length && message.content && !(message.id in thinkingExpanded.value)) {
+      thinkingExpanded.value[message.id] = false
+    }
+
+    if (message.role === 'assistant' && message.steps?.length && message.content && !(message.id in stepsExpanded.value)) {
+      stepsExpanded.value[message.id] = false
     }
   })
 }, { deep: true })
@@ -70,7 +68,6 @@ const scrollToBottom = () => {
   }
 }
 
-// 自动滚动
 watch(() => props.messages.length, () => {
   nextTick(scrollToBottom)
 })
@@ -101,8 +98,12 @@ const copyToClipboard = (text: string) => {
   navigator.clipboard.writeText(text)
 }
 
+const formatMessageTime = (timestamp: string | number | Date) => {
+  return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
 const vFocus = {
-  mounted: (el: HTMLElement) => el.focus()
+  mounted: (el: HTMLElement) => el.focus(),
 }
 
 const getCitationSourceLabel = (cite: Citation) => {
@@ -154,7 +155,6 @@ const getCitationDomain = (cite: Citation) => {
   }
 }
 
-// ---- 从引用卡片导入到文献库 ----
 const { startImportLink, isImportingLink } = useImportLinkFlow()
 const importedUrls = ref(new Set<string>())
 
@@ -167,32 +167,29 @@ const handleImportCitation = async (cite: Citation) => {
   try {
     await startImportLink(cite.url)
     importedUrls.value.add(cite.url)
-  } catch (e) {
-    console.error('[Citation Import] Failed:', e)
+  } catch (error) {
+    console.error('[Citation Import] Failed:', error)
   }
 }
 
 const getDisplayCitations = (citations: Citation[] = [], maxItems: number = 8) => {
-  // 保持后端过滤+编号后的原始顺序，不再重排
   return citations.slice(0, maxItems)
 }
 
 defineExpose({
-  scrollToBottom
+  scrollToBottom,
 })
 </script>
 
 <template>
   <div class="h-full flex flex-col relative w-full overflow-hidden">
-    <!-- Tooltip Component (Global Absolute Position within List) -->
-    <div 
+    <div
       v-if="tooltipState.visible && tooltipState.content"
       class="msg-tooltip fixed z-[100] w-80 p-3 transition-opacity duration-200 overflow-hidden"
       :style="{ left: Math.min(tooltipState.x - 20, 1024) + 'px', top: (tooltipState.y - 8) + 'px', transform: 'translateY(-100%)' }"
       @mouseenter="handleTooltipEnter"
       @mouseleave="handleTooltipLeave"
     >
-      <!-- Header: Type -->
       <div class="flex items-center justify-between mb-2">
         <span class="text-[9px] font-bold text-primary-500 dark:text-gray-300 uppercase tracking-widest">
           {{ getCitationSourceLabel(tooltipState.content) }}
@@ -202,12 +199,10 @@ defineExpose({
         </span>
       </div>
 
-      <!-- Name -->
       <h4 class="font-bold text-xs text-slate-800 dark:text-gray-100 mb-1.5 leading-tight">
         {{ tooltipState.content.name || '检索内容' }}
       </h4>
 
-      <!-- Text -->
       <div class="text-[11px] text-slate-700 dark:text-gray-300 leading-normal bg-primary-50/20 dark:bg-white/5 p-2 rounded border border-primary-100/50 dark:border-gray-800/50 line-clamp-6 markdown-body prose prose-sm max-w-none dark:prose-invert" v-html="renderMarkdown(tooltipState.content.text)">
       </div>
 
@@ -226,7 +221,6 @@ defineExpose({
         </span>
       </div>
 
-      <!-- Footer -->
       <div v-if="tooltipState.content.url || tooltipState.content.page" class="flex items-center justify-between mt-2 text-[9px]">
         <button
           v-if="isExternalCitation(tooltipState.content)"
@@ -255,228 +249,186 @@ defineExpose({
       </div>
     </div>
 
-
-
-    <!-- Messages Area -->
-    <div ref="messagesContainer" class="flex-1 overflow-y-auto w-full px-3 pt-4 pb-2 space-y-3">
-      <!-- Message List -->
-      <div 
-        v-for="(message, index) in messages" 
-        :key="'msg-' + index" 
-        class="relative group"
-        :class="message.role === 'user' ? 'flex justify-end' : 'flex justify-start'"
+    <div ref="messagesContainer" class="flex-1 overflow-y-auto w-full px-3 pt-2 pb-3">
+      <div
+        v-for="(message, index) in messages"
+        :key="'msg-' + index"
+        class="chat-log__item group"
       >
-        <!-- Selection Checkbox (left side for all) -->
-        <div v-if="selectionMode" class="flex-shrink-0 pt-2 mr-2">
-          <input 
-            type="checkbox" 
-            :checked="selectedIds?.has(message.id)"
-            @change="emit('toggle-selection', message.id)"
-            class="w-3.5 h-3.5 rounded border-primary-200 dark:border-slate-700 text-primary-600 dark:text-slate-100 focus:ring-0 focus:ring-offset-0 cursor-pointer transition-colors"
-            title="选择消息"
-          >
-        </div>
+        <div
+          :class="[
+            'chat-log__row',
+            message.role === 'user' ? 'chat-log__row--user' : 'chat-log__row--assistant',
+          ]"
+        >
+          <div v-if="selectionMode" class="chat-log__select">
+            <input
+              type="checkbox"
+              :checked="selectedIds?.has(message.id)"
+              @change="emit('toggle-selection', message.id)"
+              class="w-3.5 h-3.5 rounded border-primary-200 dark:border-slate-700 text-primary-600 dark:text-slate-100 focus:ring-0 focus:ring-offset-0 cursor-pointer transition-colors"
+              title="选择消息"
+            >
+          </div>
 
-        <!-- Message Bubble -->
-        <div class="w-full">
-          <!-- Content -->
-          <div 
+          <div
             :class="[
-              'transition-all duration-200',
-              message.role === 'user' 
-                ? 'msg-bubble-user px-4 py-3 rounded-xl bg-primary-600 dark:bg-primary-700 text-white' 
-                : 'msg-bubble-ai px-4 py-3 rounded-xl bg-gray-50 dark:bg-[#2a2a2d] border border-gray-100/80 dark:border-slate-700/60'
+              'chat-log__body',
+              message.role === 'user' ? 'chat-log__body--user' : 'chat-log__body--assistant',
             ]"
           >
-            <!-- Edit Mode -->
-            <div v-if="editingIndex === index" class="animate-in fade-in zoom-in-95 duration-200">
-              <textarea 
-                v-model="editValue"
-                class="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-sm leading-snug text-white placeholder-white/50 resize-none p-0 overflow-hidden"
-                placeholder="编辑消息..."
-                style="field-sizing: content;"
-                v-focus
-              ></textarea>
-              <div class="flex justify-end gap-2 mt-3 pt-2 border-t border-white/15">
-                <button @click="cancelEdit" class="px-2.5 py-1 text-[11px] text-white/70 hover:text-white hover:bg-white/10 rounded-md transition-colors">取消</button>
-                <button @click="submitEdit(index)" class="px-2.5 py-1 text-[11px] bg-white/20 text-white hover:bg-white/30 rounded-md transition-colors">确认重发</button>
+            <div v-if="message.role === 'user'" class="chat-log__floating-meta chat-log__floating-meta--user">
+              <div class="chat-log__floating-meta-inner">
+                <span class="chat-log__time">{{ formatMessageTime(message.timestamp) }}</span>
+                <span v-if="message.meta?.edited" class="chat-log__edited">已编辑</span>
+                <button @click="copyToClipboard(message.content)" class="chat-log__icon-btn" title="复制内容">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>
+                </button>
+                <template v-if="!selectionMode && editingIndex !== index">
+                  <button @click="startEdit(index, message.content)" class="chat-log__icon-btn" title="编辑重发">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                  </button>
+                  <button @click="emit('resend', index)" class="chat-log__icon-btn" title="重新发送">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                  </button>
+                </template>
               </div>
             </div>
 
-            <template v-else>
-              <!-- User Message Content -->
-              <div v-if="message.role === 'user'">
-                <div v-if="message.images?.length" class="flex flex-wrap gap-2 mb-2">
-                  <img
-                    v-for="(img, imgIdx) in message.images"
-                    :key="imgIdx"
-                    :src="img"
-                    class="max-h-36 max-w-full rounded-lg border border-white/20 object-contain"
-                  />
+            <div
+              :class="[
+                'chat-log__content',
+                message.role === 'user' ? 'chat-log__content--user' : 'chat-log__content--assistant',
+              ]"
+            >
+              <div v-if="editingIndex === index" class="animate-in fade-in zoom-in-95 duration-200">
+                <textarea
+                  v-model="editValue"
+                  class="chat-log__editor"
+                  placeholder="编辑消息..."
+                  style="field-sizing: content;"
+                  v-focus
+                ></textarea>
+                <div class="chat-log__editor-actions">
+                  <button @click="cancelEdit" class="chat-log__secondary-btn">取消</button>
+                  <button @click="submitEdit(index)" class="chat-log__primary-btn">确认重发</button>
                 </div>
-                <p class="text-[13px] whitespace-pre-wrap break-words leading-relaxed">
-                  {{ message.content }}
-                </p>
               </div>
-              
-              <!-- Assistant Message Content -->
-              <div v-else class="space-y-1.5">
-                <!-- Thinking Block -->
-                <div v-if="message.thoughts?.length" class="mb-1.5">
-                  <button
-                    @click="toggleThinking(message.id)"
-                    class="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors group/th select-none"
-                  >
-                    <svg
-                      class="w-3 h-3 transition-transform duration-200"
-                      :class="isThinkingExpanded(message.id) ? 'rotate-90' : ''"
-                      fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                    >
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                    </svg>
-                    <span class="font-medium tracking-wide">思考过程</span>
-                    <span class="opacity-60">({{ message.thoughts.length }} 条)</span>
-                  </button>
-                  <div
-                    v-if="isThinkingExpanded(message.id)"
-                    class="mt-1.5 ml-1 pl-3 border-l-2 border-slate-200 dark:border-slate-700 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200"
-                  >
-                    <p
-                      v-for="(thought, ti) in message.thoughts"
-                      :key="ti"
-                      class="text-[11.5px] text-slate-500 dark:text-slate-400 leading-relaxed"
-                    >{{ thought }}</p>
+
+              <template v-else>
+                <div v-if="message.role === 'user'">
+                  <div v-if="message.images?.length" class="flex flex-wrap gap-2 mb-2">
+                    <img
+                      v-for="(img, imgIdx) in message.images"
+                      :key="imgIdx"
+                      :src="img"
+                      class="max-h-36 max-w-full rounded-lg border border-[var(--c-border-light)] object-contain"
+                    />
                   </div>
+                  <p class="chat-log__plain-text">{{ message.content }}</p>
                 </div>
-                <!-- Steps Block -->
-                <div v-if="message.steps?.length" class="mb-1.5">
-                  <button
-                    @click="toggleSteps(message.id)"
-                    class="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors group/st select-none"
-                  >
-                    <svg
-                      class="w-3 h-3 transition-transform duration-200"
-                      :class="isStepsExpanded(message.id) ? 'rotate-90' : ''"
-                      fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                    >
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                    </svg>
-                    <span class="font-medium tracking-wide">执行步骤</span>
-                    <span class="opacity-60">({{ message.steps.length }})</span>
-                  </button>
-                  <div
-                    v-if="isStepsExpanded(message.id)"
-                    class="mt-1.5 ml-1 pl-3 border-l-2 border-slate-200 dark:border-slate-700 space-y-1 animate-in fade-in slide-in-from-top-1 duration-200"
-                  >
-                    <div
-                      v-for="(step, si) in message.steps"
-                      :key="si"
-                      class="flex items-center gap-2 text-[11.5px]"
-                    >
-                      <span
-                        :class="step.status === 'done'
-                          ? 'w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0'
-                          : 'w-1.5 h-1.5 rounded-full bg-slate-400 animate-pulse flex-shrink-0'"
-                      />
-                      <span class="text-slate-500 dark:text-slate-400 leading-relaxed">{{ step.text }}</span>
+
+                <div v-else class="chat-log__assistant-block">
+                  <div v-if="message.thoughts?.length" class="chat-log__subpanel">
+                    <button @click="toggleThinking(message.id)" class="chat-log__toggle">
+                      <svg
+                        class="w-3 h-3 transition-transform duration-200"
+                        :class="isThinkingExpanded(message.id) ? 'rotate-90' : ''"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                      </svg>
+                      <span class="font-medium tracking-wide">思考过程</span>
+                      <span class="opacity-60">({{ message.thoughts.length }} 条)</span>
+                    </button>
+                    <div v-if="isThinkingExpanded(message.id)" class="chat-log__subpanel-body animate-in fade-in slide-in-from-top-1 duration-200">
+                      <p v-for="(thought, thoughtIndex) in message.thoughts" :key="thoughtIndex" class="chat-log__subpanel-text">{{ thought }}</p>
                     </div>
                   </div>
-                </div>
 
-                <div
-                  v-if="message.content"
-                  class="markdown-body prose prose-sm max-w-none dark:prose-invert
-                         prose-pre:bg-[#282c34] prose-pre:m-0
-                         prose-headings:font-semibold prose-headings:text-gray-800 dark:prose-headings:text-gray-100
-                         prose-a:text-primary-500 dark:prose-a:text-primary-400 prose-a:no-underline hover:prose-a:underline
-                         text-gray-700 dark:text-gray-200 text-[13px] leading-relaxed"
-                  v-html="renderMarkdown(message.content)"
-                  @mouseover="handleMessageMouseOver($event, message.citations || [])"
-                  @mouseout="handleMessageMouseOut"
-                  @click="onCitationClick($event, message.citations || [])"
-                ></div>
-                <p
-                  v-else-if="!message.steps?.length"
-                  class="text-[12px] text-slate-400 dark:text-slate-500 italic"
-                >正在生成回复...</p>
+                  <div v-if="message.steps?.length" class="chat-log__subpanel">
+                    <button @click="toggleSteps(message.id)" class="chat-log__toggle">
+                      <svg
+                        class="w-3 h-3 transition-transform duration-200"
+                        :class="isStepsExpanded(message.id) ? 'rotate-90' : ''"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                      </svg>
+                      <span class="font-medium tracking-wide">执行步骤</span>
+                      <span class="opacity-60">({{ message.steps.length }})</span>
+                    </button>
+                    <div v-if="isStepsExpanded(message.id)" class="chat-log__subpanel-body animate-in fade-in slide-in-from-top-1 duration-200">
+                      <div v-for="(step, stepIndex) in message.steps" :key="stepIndex" class="flex items-center gap-2 text-[11.5px]">
+                        <span
+                          :class="step.status === 'done'
+                            ? 'w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0'
+                            : 'w-1.5 h-1.5 rounded-full bg-slate-400 animate-pulse flex-shrink-0'"
+                        />
+                        <span class="chat-log__subpanel-text">{{ step.text }}</span>
+                      </div>
+                    </div>
+                  </div>
 
-                <!-- AI Citations -->
-                <div v-if="message.citations?.length" class="flex items-center gap-x-2 gap-y-1 flex-wrap pt-0.5 pb-0.5 text-[11px]">
-                  <span 
-                    v-for="(cite, citeIdx) in getDisplayCitations(message.citations || [])" 
-                    :key="cite.id || citeIdx"
-                    :class="[
-                      'citation-ref font-medium cursor-pointer transition-colors duration-200 whitespace-nowrap inline-flex items-center gap-1 px-1.5 py-0.5 rounded border',
-                      getCitationChipClass(cite)
-                    ]"
-                    :data-id="citeIdx + 1"
-                    @mouseover="handleMessageMouseOver($event, getDisplayCitations(message.citations || []))"
+                  <div
+                    v-if="message.content"
+                    class="markdown-body prose prose-sm max-w-none dark:prose-invert prose-pre:bg-[#282c34] prose-pre:m-0 prose-headings:font-semibold prose-headings:text-gray-800 dark:prose-headings:text-gray-100 prose-a:text-primary-500 dark:prose-a:text-primary-400 prose-a:no-underline hover:prose-a:underline text-gray-700 dark:text-gray-200 text-[13px] leading-relaxed"
+                    v-html="renderMarkdown(message.content)"
+                    @mouseover="handleMessageMouseOver($event, message.citations || [])"
                     @mouseout="handleMessageMouseOut"
-                    @click="onCitationClick($event, getDisplayCitations(message.citations || []))"
-                  >
-                    <span class="text-[9px] font-bold opacity-80">{{ getCitationSourceCode(cite) }}</span>
-                    <span class="opacity-70">[{{ citeIdx + 1 }}]</span>
-                    <span class="max-w-[120px] truncate inline-block align-bottom">{{ cite.name || '检索片段' }}</span>
-                    <span v-if="getCitationDomain(cite)" class="opacity-70 max-w-[110px] truncate">· {{ getCitationDomain(cite) }}</span>
-                    <span v-if="cite.citation_count !== undefined" class="opacity-70">· C{{ formatCitationCount(cite.citation_count) }}</span>
-                  </span>
+                    @click="onCitationClick($event, message.citations || [])"
+                  ></div>
+                  <p v-else-if="!message.steps?.length" class="text-[12px] text-[var(--c-text-muted)] italic">正在生成回复...</p>
+
+                  <div v-if="message.citations?.length" class="flex items-center gap-x-2 gap-y-1 flex-wrap pt-0.5 pb-0.5 text-[11px]">
+                    <span
+                      v-for="(cite, citeIdx) in getDisplayCitations(message.citations || [])"
+                      :key="cite.id || citeIdx"
+                      :class="[
+                        'citation-ref font-medium cursor-pointer transition-colors duration-200 whitespace-nowrap inline-flex items-center gap-1 px-1.5 py-0.5 rounded border',
+                        getCitationChipClass(cite),
+                      ]"
+                      :data-id="citeIdx + 1"
+                      @mouseover="handleMessageMouseOver($event, getDisplayCitations(message.citations || []))"
+                      @mouseout="handleMessageMouseOut"
+                      @click="onCitationClick($event, getDisplayCitations(message.citations || []))"
+                    >
+                      <span class="text-[9px] font-bold opacity-80">{{ getCitationSourceCode(cite) }}</span>
+                      <span class="opacity-70">[{{ citeIdx + 1 }}]</span>
+                      <span class="max-w-[120px] truncate inline-block align-bottom">{{ cite.name || '检索片段' }}</span>
+                      <span v-if="getCitationDomain(cite)" class="opacity-70 max-w-[110px] truncate">· {{ getCitationDomain(cite) }}</span>
+                      <span v-if="cite.citation_count !== undefined" class="opacity-70">· C{{ formatCitationCount(cite.citation_count) }}</span>
+                    </span>
+                  </div>
+
+                  <div v-if="message.content" class="chat-log__floating-meta chat-log__floating-meta--assistant">
+                    <button @click="copyToClipboard(message.content)" class="chat-log__icon-btn chat-log__icon-btn--assistant" title="复制内容">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </template>
-          </div>
-
-          <!-- Footer: Timestamp + Actions -->
-          <div 
-            class="mt-1 flex items-center gap-2 px-1 opacity-0 group-hover:opacity-100 transition-opacity"
-            :class="message.role === 'user' ? 'justify-end' : 'justify-start'"
-          >
-            <span class="text-[10px] text-slate-500 dark:text-slate-400">
-              {{ new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}
-            </span>
-            <span v-if="message.role === 'user' && message.meta?.edited" class="text-[10px] text-slate-500 italic">· 已编辑</span>
-
-            <button 
-              @click="copyToClipboard(message.content)"
-              class="p-0.5 text-slate-500 dark:text-slate-400 hover:text-primary-600 transition-colors"
-              title="复制内容"
-            >
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>
-            </button>
-
-            <!-- User-only: edit + resend -->
-            <template v-if="message.role === 'user' && !selectionMode && editingIndex !== index">
-              <button 
-                @click="startEdit(index, message.content)"
-                class="p-0.5 text-slate-500 dark:text-slate-400 hover:text-primary-600 transition-colors"
-                title="编辑重发"
-              >
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-              </button>
-              <button 
-                @click="emit('resend', index)"
-                class="p-0.5 text-slate-500 dark:text-slate-400 hover:text-primary-600 transition-colors"
-                title="重新发送"
-              >
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-              </button>
-            </template>
+              </template>
+            </div>
           </div>
         </div>
       </div>
-      
-      <!-- Pending Proposals -->
-      <div v-if="proposals?.length" class="px-2 space-y-2">
+
+      <div v-if="proposals?.length" class="pt-2 space-y-2">
         <ProposalCard
-          v-for="p in proposals" :key="p.id"
-          :proposal="p"
+          v-for="proposal in proposals"
+          :key="proposal.id"
+          :proposal="proposal"
           @approve="emit('proposal-approve', $event)"
           @reject="emit('proposal-reject', $event)"
         />
       </div>
 
-      <!-- AI Thinking Loader (Only show if waiting for AI to start) -->
-      <div v-if="isLoadingContent && messages[messages.length - 1]?.role === 'user'" class="w-full px-2 py-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <div class="flex items-center gap-3 text-gray-400">
+      <div v-if="isLoadingContent && messages[messages.length - 1]?.role === 'user'" class="w-full py-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <div class="chat-log__loader">
           <div class="flex gap-1.5">
             <span class="w-1.5 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full animate-pulse"></span>
             <span class="w-1.5 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full animate-pulse [animation-delay:200ms]"></span>
@@ -486,7 +438,6 @@ defineExpose({
         </div>
       </div>
 
-      <!-- Empty State -->
       <div v-if="messages.length === 0 && !isLoadingContent" class="flex-1 flex flex-col items-center justify-center min-h-[200px] opacity-80 animate-in fade-in duration-500">
         <div class="w-12 h-12 mb-6 rounded-lg bg-slate-50 dark:bg-slate-900 flex items-center justify-center border border-slate-100 dark:border-slate-800">
           <svg class="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -499,9 +450,6 @@ defineExpose({
   </div>
 </template>
 
-<!-- All styles (markdown-body, user-message-pattern, scrollbar, citation-ref) 
-     are now defined in global styles/components.css and styles/base.css -->
-
 <style scoped>
 .msg-tooltip {
   background: var(--c-bg-elevated);
@@ -509,5 +457,257 @@ defineExpose({
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   backdrop-filter: blur(12px);
+}
+
+.chat-log__item + .chat-log__item {
+  margin-top: 0.12rem;
+}
+
+.chat-log__row {
+  display: flex;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.38rem 0;
+}
+
+.chat-log__row--user {
+  justify-content: flex-end;
+}
+
+.chat-log__select {
+  flex-shrink: 0;
+  padding-top: 0.2rem;
+}
+
+.chat-log__body {
+  min-width: 0;
+  flex: 1;
+}
+
+.chat-log__body--assistant {
+  width: 100%;
+}
+
+.chat-log__body--user {
+  position: relative;
+  width: fit-content;
+  max-width: min(82%, 52rem);
+  margin-left: auto;
+  padding-bottom: 1.6rem;
+  flex: 0 1 auto;
+}
+
+.chat-log__content {
+  min-width: 0;
+  color: var(--c-text-primary);
+}
+
+.chat-log__content--user {
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.42rem 0.7rem;
+  background: color-mix(in srgb, var(--c-bg-secondary) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c-border-light) 70%, transparent);
+  border-radius: 0.95rem;
+}
+
+.chat-log__content--assistant {
+  padding-top: 0;
+}
+
+.chat-log__plain-text {
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--c-text-primary);
+}
+
+.chat-log__floating-meta {
+  position: absolute;
+  bottom: 0.12rem;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(0.65rem);
+  transition:
+    opacity var(--duration-fast) var(--ease-default),
+    transform var(--duration-fast) var(--ease-default);
+  z-index: 4;
+}
+
+.chat-log__body--user:hover > .chat-log__floating-meta--user,
+.chat-log__body--user:focus-within > .chat-log__floating-meta--user,
+.chat-log__assistant-block:hover > .chat-log__floating-meta--assistant,
+.chat-log__assistant-block:focus-within > .chat-log__floating-meta--assistant {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.chat-log__floating-meta--user {
+  right: 0;
+}
+
+.chat-log__floating-meta--assistant {
+  left: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.75rem;
+  padding: 0.14rem 0.24rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c-bg-elevated) 94%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c-border-light) 88%, transparent);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.chat-log__floating-meta-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 1.75rem;
+  padding: 0.14rem 0.24rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c-bg-elevated) 94%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c-border-light) 88%, transparent);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.chat-log__edited,
+.chat-log__time {
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  color: var(--c-text-muted);
+}
+
+.chat-log__icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 0.4rem;
+  color: var(--c-text-muted);
+  transition:
+    background-color var(--duration-fast) var(--ease-default),
+    color var(--duration-fast) var(--ease-default);
+}
+
+.chat-log__icon-btn:hover {
+  background: var(--c-btn-icon-active-bg);
+  color: var(--c-btn-icon-active-text);
+}
+
+.chat-log__icon-btn--assistant {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.chat-log__assistant-block {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-bottom: 1.6rem;
+}
+
+.chat-log__subpanel {
+  border: 1px solid var(--c-border-light);
+  background: var(--c-bg-secondary);
+  border-radius: 0.7rem;
+  padding: 0.55rem 0.7rem;
+}
+
+.chat-log__toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.6875rem;
+  color: var(--c-text-secondary);
+  transition: color var(--duration-fast) var(--ease-default);
+  user-select: none;
+}
+
+.chat-log__toggle:hover {
+  color: var(--c-text-primary);
+}
+
+.chat-log__subpanel-body {
+  margin-top: 0.55rem;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--c-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.chat-log__subpanel-text {
+  color: var(--c-text-secondary);
+  line-height: 1.55;
+}
+
+.chat-log__editor {
+  width: 100%;
+  resize: none;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--c-text-primary);
+}
+
+.chat-log__editor::placeholder {
+  color: var(--c-text-muted);
+}
+
+.chat-log__editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--c-border-light);
+}
+
+.chat-log__secondary-btn,
+.chat-log__primary-btn {
+  padding: 0.35rem 0.65rem;
+  border-radius: 0.5rem;
+  font-size: 0.6875rem;
+  transition:
+    background-color var(--duration-fast) var(--ease-default),
+    color var(--duration-fast) var(--ease-default),
+    border-color var(--duration-fast) var(--ease-default);
+}
+
+.chat-log__secondary-btn {
+  color: var(--c-text-secondary);
+  border: 1px solid var(--c-border-light);
+}
+
+.chat-log__secondary-btn:hover {
+  color: var(--c-text-primary);
+  background: var(--c-bg-hover);
+}
+
+.chat-log__primary-btn {
+  color: white;
+  background: var(--c-btn-icon-active-text);
+}
+
+.chat-log__primary-btn:hover {
+  filter: brightness(1.05);
+}
+
+.chat-log__loader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--c-text-muted);
 }
 </style>

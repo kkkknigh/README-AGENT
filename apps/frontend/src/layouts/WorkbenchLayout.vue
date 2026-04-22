@@ -616,13 +616,36 @@ onBeforeUnmount(() => {
     ></div>
 
     <main class="workbench__main">
-      <EditorTabs
-        :tabs="workbenchStore.openTabs"
-        :active-tab-id="workbenchStore.activeTabId"
-        @activate="workbenchStore.activateTab"
-        @close="workbenchStore.closeTab"
-        @close-others="workbenchStore.closeOtherTabs"
-      />
+      <div class="workbench__topbar" :style="contentStyle">
+        <div class="workbench__topbar-editor">
+          <EditorTabs
+            :tabs="workbenchStore.openTabs"
+            :active-tab-id="workbenchStore.activeTabId"
+            @activate="workbenchStore.activateTab"
+            @close="workbenchStore.closeTab"
+            @close-others="workbenchStore.closeOtherTabs"
+          />
+        </div>
+
+        <div
+          v-if="workbenchStore.layout.auxPanelVisible"
+          class="workbench__resizer workbench__resizer--aux workbench__resizer--topbar"
+          @mousedown="startLayoutResize($event, 'aux')"
+        ></div>
+
+        <div v-if="workbenchStore.layout.auxPanelVisible" class="workbench__chat-header workbench__chat-header--topbar">
+          <span>AI Chat</span>
+          <button
+            class="workbench__sidebar-icon"
+            title="Hide Chat"
+            @click="workbenchStore.hideAuxPanel()"
+          >
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
 
       <div class="workbench__content" :style="contentStyle">
         <div class="workbench__editor">
@@ -669,18 +692,6 @@ onBeforeUnmount(() => {
         ></div>
 
         <aside v-if="workbenchStore.layout.auxPanelVisible" class="workbench__chat">
-          <div class="workbench__chat-header">
-            <span>AI Chat</span>
-            <button
-              class="workbench__sidebar-icon"
-              title="Hide Chat"
-              @click="workbenchStore.hideAuxPanel()"
-            >
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
           <div class="workbench__chat-body">
             <ChatTab
               :scope="workbenchStore.rightChatContext.scope"
@@ -1018,6 +1029,10 @@ onBeforeUnmount(() => {
   min-width: 4px;
 }
 
+.workbench__resizer--topbar {
+  height: 40px;
+}
+
 .workbench__resizer:hover {
   background:
     linear-gradient(
@@ -1034,6 +1049,18 @@ onBeforeUnmount(() => {
   min-width: 0;
   display: grid;
   grid-template-rows: 40px minmax(0, 1fr) 24px;
+  overflow: hidden;
+}
+
+.workbench__topbar {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  overflow: hidden;
+}
+
+.workbench__topbar-editor {
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -1087,6 +1114,10 @@ onBeforeUnmount(() => {
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
+}
+
+.workbench__chat-header--topbar {
+  background: var(--c-bg-elevated);
 }
 
 .workbench__chat-body {
