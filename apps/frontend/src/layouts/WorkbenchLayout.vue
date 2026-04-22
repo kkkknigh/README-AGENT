@@ -46,6 +46,7 @@ const profileEditForm = ref({
   bio: '',
   defaultTranslationLang: 'zh',
 })
+const chatTabRef = ref<InstanceType<typeof ChatTab> | null>(null)
 
 let stopLayoutResize: (() => void) | null = null
 let resizeObserver: ResizeObserver | null = null
@@ -308,6 +309,14 @@ function startLayoutResize(event: MouseEvent, panel: 'sidebar' | 'aux') {
   window.addEventListener('mousemove', onMove)
   window.addEventListener('mouseup', onUp)
   stopLayoutResize = onUp
+}
+
+function openChatHistory() {
+  chatTabRef.value?.toggleHistoryPanel()
+}
+
+function createNewChat() {
+  chatTabRef.value?.createNewChat()
 }
 
 watch(() => workbenchStore.selectedWorkspaceId, (workspaceId) => {
@@ -635,15 +644,31 @@ onBeforeUnmount(() => {
 
         <div v-if="workbenchStore.layout.auxPanelVisible" class="workbench__chat-header workbench__chat-header--topbar">
           <span>AI Chat</span>
-          <button
-            class="workbench__sidebar-icon"
-            title="Hide Chat"
-            @click="workbenchStore.hideAuxPanel()"
-          >
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <div class="workbench__chat-header-actions">
+            <button
+              class="workbench__chat-action"
+              title="New Chat"
+              @click="createNewChat()"
+            >
+              New
+            </button>
+            <button
+              class="workbench__chat-action"
+              title="Chat History"
+              @click="openChatHistory()"
+            >
+              History
+            </button>
+            <button
+              class="workbench__sidebar-icon"
+              title="Hide Chat"
+              @click="workbenchStore.hideAuxPanel()"
+            >
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -694,10 +719,15 @@ onBeforeUnmount(() => {
         <aside v-if="workbenchStore.layout.auxPanelVisible" class="workbench__chat">
           <div class="workbench__chat-body">
             <ChatTab
+              ref="chatTabRef"
               :scope="workbenchStore.rightChatContext.scope"
               :workspace-id="workbenchStore.rightChatContext.workspaceId"
               :document-remote-id="workbenchStore.rightChatContext.documentRemoteId"
+              :current-reading-document-id="workbenchStore.rightChatContext.currentReadingDocumentId"
               :active-resource-type="workbenchStore.rightChatContext.activeResourceType"
+              :active-tab-id="workbenchStore.rightChatContext.activeTabId"
+              :active-tab-title="workbenchStore.rightChatContext.activeTabTitle"
+              :open-tabs="workbenchStore.rightChatContext.openTabs"
             />
           </div>
         </aside>
@@ -1118,6 +1148,29 @@ onBeforeUnmount(() => {
 
 .workbench__chat-header--topbar {
   background: var(--c-bg-elevated);
+}
+
+.workbench__chat-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.workbench__chat-action {
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: var(--c-bg-input);
+  border: var(--border-width) solid var(--c-border-input);
+  color: var(--c-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.workbench__chat-action:hover {
+  background: var(--c-bg-hover);
+  color: var(--c-text-primary);
 }
 
 .workbench__chat-body {

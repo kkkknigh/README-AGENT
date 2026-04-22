@@ -1,3 +1,5 @@
+import type { WorkbenchContextDto } from '@readmeclaw/shared-ui'
+
 /*
 ----------------------------------------------------------------------
                             类型定义
@@ -132,6 +134,7 @@ export interface ChatMessage {
   images?: string[]    // 附带的图片（base64）
   thoughts?: string[]   // LLM 中间思考过程（IndexedDB 持久化）
   steps?: AgentStep[]   // Agent 执行步骤列表（IndexedDB 持久化）
+  ideState?: WorkbenchContextDto | null
   meta?: {
     edited?: boolean          // 是否为编辑后重发
   }

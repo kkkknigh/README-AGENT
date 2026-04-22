@@ -1,9 +1,23 @@
 import { Router } from "express"
+import type { WorkbenchContextDto } from "@readmeclaw/shared-ui"
 import { getParsedDocument } from "../services/document-cache.js"
 import { createMessage } from "../services/chat.js"
 import { callOpenAiCompatibleVision } from "../services/llm.js"
 
 export const documentsRouter = Router()
+
+function buildOverlayIdeState(pdfId: string): WorkbenchContextDto {
+  return {
+    scope: "document",
+    workspaceId: null,
+    documentRemoteId: pdfId,
+    currentReadingDocumentId: pdfId,
+    activeResourceType: "document",
+    activeTabId: null,
+    activeTabTitle: null,
+    openTabs: [],
+  }
+}
 
 documentsRouter.get("/:pdfId/status", (req, res) => {
   const document = getParsedDocument(req.params.pdfId)
@@ -77,15 +91,18 @@ documentsRouter.post("/:pdfId/overlay/explain", async (req, res, next) => {
 
     const sessionId = req.body.sessionId == null ? null : String(req.body.sessionId)
     if (sessionId) {
+      const ideState = buildOverlayIdeState(req.params.pdfId)
       createMessage({
         threadId: sessionId,
         role: "user",
         content: `Explain the selected ${kind} on page ${page}.`,
+        ideState,
       })
       createMessage({
         threadId: sessionId,
         role: "assistant",
         content: result.text,
+        ideState,
       })
     }
 

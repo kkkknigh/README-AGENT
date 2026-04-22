@@ -28,8 +28,8 @@ export const toolRegistry: AgentTool[] = [
       const query = String(args.query ?? "").trim()
       const items = searchDocumentChunks({
         query,
-        documentId: typeof args.documentId === "string" ? args.documentId : ctx.thread.documentRemoteId,
-        workspaceId: typeof args.workspaceId === "string" ? args.workspaceId : ctx.thread.workspaceId,
+        documentId: typeof args.documentId === "string" ? args.documentId : ctx.effectiveDocumentId ?? undefined,
+        workspaceId: typeof args.workspaceId === "string" ? args.workspaceId : ctx.effectiveWorkspaceId ?? undefined,
         limit: Number(args.limit ?? 6),
       })
       return {
@@ -49,7 +49,7 @@ export const toolRegistry: AgentTool[] = [
     actionType: "search",
     actionTypeLabel: "SEARCH",
     execute: (ctx, args) => {
-      const documentId = String(args.documentId ?? ctx.thread.documentRemoteId ?? "")
+      const documentId = String(args.documentId ?? ctx.effectiveDocumentId ?? "")
       const parsed = getParsedDocument(documentId)
       const page = args.page == null ? null : Number(args.page)
       const paragraphs = parsed?.paragraphs.filter((item) => page == null || item.page === page).slice(0, 12) ?? []
@@ -67,7 +67,7 @@ export const toolRegistry: AgentTool[] = [
     actionType: "search",
     actionTypeLabel: "SEARCH",
     execute: (ctx, args) => {
-      const documentId = String(args.documentId ?? ctx.thread.documentRemoteId ?? "")
+      const documentId = String(args.documentId ?? ctx.effectiveDocumentId ?? "")
       const parsed = getParsedDocument(documentId)
       return {
         summary: parsed ? `Loaded document layout for ${documentId}.` : `Document ${documentId} was not found.`,
@@ -83,7 +83,7 @@ export const toolRegistry: AgentTool[] = [
     actionType: "search",
     actionTypeLabel: "SEARCH",
     execute: (ctx, args) => {
-      const documentId = String(args.documentId ?? ctx.thread.documentRemoteId ?? "")
+      const documentId = String(args.documentId ?? ctx.effectiveDocumentId ?? "")
       const parsed = getParsedDocument(documentId)
       const page = Number(args.page ?? 1)
       const kind = String(args.kind ?? "image")
@@ -121,7 +121,7 @@ export const toolRegistry: AgentTool[] = [
     actionType: "search",
     actionTypeLabel: "SEARCH",
     execute: (ctx, args) => {
-      const workspaceId = String(args.workspaceId ?? ctx.thread.workspaceId ?? "")
+      const workspaceId = String(args.workspaceId ?? ctx.effectiveWorkspaceId ?? "")
       const detail = getWorkspaceDetail(workspaceId)
       return {
         summary: detail ? `Workspace ${detail.workspace.name} has ${detail.documents.length} documents.` : `Workspace ${workspaceId} not found.`,
@@ -137,7 +137,7 @@ export const toolRegistry: AgentTool[] = [
     actionType: "manage_notes",
     actionTypeLabel: "NOTES",
     execute: (ctx, args) => {
-      const notes = listNotes(typeof args.pdfId === "string" ? args.pdfId : ctx.thread.documentRemoteId ?? undefined)
+      const notes = listNotes(typeof args.pdfId === "string" ? args.pdfId : ctx.effectiveDocumentId ?? undefined)
       return {
         summary: `Loaded ${notes.length} notes.`,
         data: notes,

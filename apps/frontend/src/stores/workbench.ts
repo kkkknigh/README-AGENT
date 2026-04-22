@@ -116,40 +116,41 @@ export const useWorkbenchStore = defineStore("workbench", () => {
 
   const rightChatContext = computed<WorkbenchChatContext>(() => {
     const tab = activeTab.value
+    const currentReadingDocumentId = tab?.type === "document"
+      ? (tab.payload as DocumentTabPayload).documentId
+      : tab?.type === "note"
+        ? (tab.payload as NoteTabPayload).pdfId ?? null
+        : null
+    const baseScope = selectedWorkspaceId.value ? "workspace" : "global"
+    const openTabSummaries = openTabs.value.map((item) => ({
+      id: item.id,
+      type: item.type,
+      resourceRemoteId: item.resourceRemoteId,
+      title: item.title,
+    }))
+
     if (!tab) {
       return {
-        scope: selectedWorkspaceId.value ? "workspace" : "global",
+        scope: baseScope,
         workspaceId: selectedWorkspaceId.value,
         documentRemoteId: null,
+        currentReadingDocumentId: null,
         activeResourceType: null,
-      }
-    }
-
-    if (tab.type === "document") {
-      const payload = tab.payload as DocumentTabPayload
-      return {
-        scope: "document",
-        workspaceId: selectedWorkspaceId.value,
-        documentRemoteId: payload.documentId,
-        activeResourceType: "document",
-      }
-    }
-
-    if (tab.type === "note") {
-      const payload = tab.payload as NoteTabPayload
-      return {
-        scope: payload.pdfId ? "document" : (selectedWorkspaceId.value ? "workspace" : "global"),
-        workspaceId: selectedWorkspaceId.value,
-        documentRemoteId: payload.pdfId ?? null,
-        activeResourceType: "note",
+        activeTabId: null,
+        activeTabTitle: null,
+        openTabs: openTabSummaries,
       }
     }
 
     return {
-      scope: selectedWorkspaceId.value ? "workspace" : "global",
+      scope: baseScope,
       workspaceId: selectedWorkspaceId.value,
       documentRemoteId: null,
+      currentReadingDocumentId,
       activeResourceType: tab.type,
+      activeTabId: tab.id,
+      activeTabTitle: tab.title,
+      openTabs: openTabSummaries,
     }
   })
 

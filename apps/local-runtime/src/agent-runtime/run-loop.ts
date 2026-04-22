@@ -67,6 +67,7 @@ export async function executeRunLoop(input: {
         threadId: input.request.thread.id,
         role: "assistant",
         content: assistantContent,
+        ideState: input.context.ideState,
       })
       upsertMessageMeta({
         messageId: assistantMessage.id,
@@ -74,6 +75,7 @@ export async function executeRunLoop(input: {
         citationsJson: citations.length > 0 ? JSON.stringify(citations) : null,
         thoughtsJson: thoughts.length > 0 ? JSON.stringify(thoughts) : null,
         stepsJson: steps.length > 0 ? JSON.stringify(steps.map((step) => ({ ...step, status: "done" as const }))) : null,
+        ideStateJson: input.context.ideState ? JSON.stringify(input.context.ideState) : null,
       })
     }
 
@@ -91,6 +93,8 @@ export async function executeRunLoop(input: {
       context_used: {
         scope: input.context.scope,
         status,
+        effectiveDocumentId: input.context.effectiveDocumentId,
+        effectiveWorkspaceId: input.context.effectiveWorkspaceId,
       },
     })
   }

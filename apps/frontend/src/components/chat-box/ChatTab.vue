@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // ------------------------- 导入依赖与 store -------------------------
-import { ref, computed, watch, onBeforeUnmount, onMounted, nextTick, toRef } from 'vue'
+import { ref, computed, onBeforeUnmount, onMounted, nextTick, toRef } from 'vue'
 import { useQueryClient } from '@tanstack/vue-query'
 import { useChatStore } from '../../stores/chat'
 import { usePanelStore } from '../../stores/panel'
@@ -35,6 +35,10 @@ const props = withDefaults(defineProps<Partial<WorkbenchContextDto>>(), {
   workspaceId: null,
   documentRemoteId: null,
   activeResourceType: null,
+  currentReadingDocumentId: null,
+  activeTabId: null,
+  activeTabTitle: null,
+  openTabs: () => [],
 })
 
 const chatStore = useChatStore()
@@ -63,11 +67,21 @@ const showHistoryPanel = ref(false)
 const sessionError = ref('')
 
 // ------------------------- Vue Query -------------------------
-const currentPdfId = computed(() => props.documentRemoteId ?? libraryStore.currentDocumentId)
+const currentPdfId = computed(() => props.currentReadingDocumentId ?? props.documentRemoteId ?? libraryStore.currentDocumentId)
 const currentSessionContext = computed(() => ({
+  scope: 'global' as const,
+  workspaceId: props.workspaceId ?? null,
+  documentRemoteId: currentPdfId.value ?? null,
+}))
+const attachedContext = computed<WorkbenchContextDto>(() => ({
   scope: props.scope ?? 'global',
   workspaceId: props.workspaceId ?? null,
-  documentRemoteId: (props.scope ?? 'global') === 'document' ? (currentPdfId.value ?? null) : null,
+  documentRemoteId: props.documentRemoteId ?? null,
+  currentReadingDocumentId: props.currentReadingDocumentId ?? currentPdfId.value ?? null,
+  activeResourceType: props.activeResourceType ?? null,
+  activeTabId: props.activeTabId ?? null,
+  activeTabTitle: props.activeTabTitle ?? null,
+  openTabs: props.openTabs ?? [],
 }))
 const currentSessionId = toRef(chatStore, 'currentSessionId')
 
@@ -312,6 +326,7 @@ const executeSendMessage = async (
       pruneFromId: meta?.resendFromId,
       contextText,
       images,
+      attachedContext: attachedContext.value,
       signal: abortController.signal
     })
 
@@ -483,25 +498,6 @@ const handleOverlayExplainEvent = async (event: Event) => {
 }
 
 // 监听当前文档 ID 变化
-watch(currentSessionContext, async () => {
-    // 刷新会话列表
-    await refetchSessions()
-    
-    // 自动寻找属于该 PDF 的最近对话
-    nextTick(() => {
-      const pdfSessions = currentScopedSessions.value
-      if (pdfSessions.length > 0) {
-        // 尝试保持当前会话，如果它属于新 PDF；否则切换
-        const belongs = pdfSessions.some(s => s.id === chatStore.currentSessionId)
-        if (!belongs) {
-          chatStore.currentSessionId = pdfSessions[0]!.id
-        }
-      } else {
-        chatStore.currentSessionId = null
-      }
-    })
-}, { immediate: true, deep: true })
-
 defineExpose({
   toggleHistoryPanel,
   createNewChat,

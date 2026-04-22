@@ -11,6 +11,7 @@ import type {
   Translation,
   UpdateNoteRequest,
 } from "../types"
+import type { WorkbenchContextDto } from "@readmeclaw/shared-ui"
 import type { UserProfile } from "../stores/profile"
 import {
   api,
@@ -251,8 +252,11 @@ type SessionMessageRecord = {
   attachments: any[]
   thoughts?: string[]
   steps?: Array<{ text: string; status: "done" | "running" }>
+  ideState?: WorkbenchContextDto | null
   runId?: string | null
 }
+
+type ChatAttachedContextPayload = WorkbenchContextDto
 
 export interface GraphNodeRecord {
   id: string
@@ -536,7 +540,7 @@ export const linkApi = {
 
 export const chatSessionApi = {
   listSessions: async (
-    context?: {
+    _context?: {
       scope?: "global" | "workspace" | "document"
       workspaceId?: string | null
       documentRemoteId?: string | null
@@ -546,13 +550,6 @@ export const chatSessionApi = {
     const response = await api.get("/threads")
     const items = (response.data.items ?? []) as Array<any>
     const sessions = items
-      .filter((item) => {
-        if (!context?.scope) return true
-        if (item.scope !== context.scope) return false
-        if (context.scope === "workspace") return item.workspaceId === (context.workspaceId ?? null)
-        if (context.scope === "document") return item.documentRemoteId === (context.documentRemoteId ?? null)
-        return true
-      })
       .map((item) => ({
         id: item.id,
         pdfId: item.documentRemoteId ?? "",
@@ -570,13 +567,11 @@ export const chatSessionApi = {
     workspaceId?: string | null
     documentRemoteId?: string | null
   }) => {
-    const pdfId = context?.documentRemoteId ?? sessionStorage.getItem("readme_library_current")
-    const scope = context?.scope ?? (pdfId ? "document" : "global")
     const response = await api.post("/threads", {
       title: "New Chat",
-      scope,
+      scope: "global",
       workspaceId: context?.workspaceId ?? null,
-      documentRemoteId: scope === "document" ? pdfId : null,
+      documentRemoteId: context?.documentRemoteId ?? null,
     })
     return {
       sessionId: response.data.id as string,
@@ -602,6 +597,7 @@ export const chatSessionApi = {
         attachments: item.attachments ?? [],
         thoughts: item.thoughts ?? [],
         steps: item.steps ?? [],
+        ideState: item.ideState ?? null,
         runId: item.runId ?? null,
       }))
       return { messages }
@@ -618,6 +614,7 @@ export const chatSessionApi = {
     _pruneFromId?: string,
     _contextText?: string,
     _images?: string[],
+    attachedContext?: ChatAttachedContextPayload,
     onEvent?: (event: ChatStreamEvent) => void,
     signal?: AbortSignal,
   ) => {
@@ -635,6 +632,7 @@ export const chatSessionApi = {
         history,
         contextText: _contextText,
         images: _images,
+        attachedContext,
       },
       {
         onMessage: (event) => {

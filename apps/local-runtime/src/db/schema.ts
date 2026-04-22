@@ -184,6 +184,7 @@ CREATE TABLE IF NOT EXISTS local_chat_message_meta (
   thoughts_json TEXT,
   steps_json TEXT,
   attachments_json TEXT,
+  ide_state_json TEXT,
   updated_at TEXT NOT NULL
 );
 

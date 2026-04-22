@@ -1,3 +1,4 @@
+import type { WorkbenchContextDto } from "@readmeclaw/shared-ui"
 import type express from "express"
 import { buildThreadContext } from "./context-builder.js"
 import { createRunAbortController, clearRunAbortController } from "./abort-controller.js"
@@ -19,8 +20,9 @@ export async function createAndStreamRun(input: {
     apiBase?: string | null
     apiKey?: string | null
   }
+  attachedContext?: WorkbenchContextDto | null
 }) {
-  const context = buildThreadContext(input.threadId)
+  const context = buildThreadContext(input.threadId, input.attachedContext)
   const history = input.history.length > 0
     ? input.history
     : listMessages(input.threadId)
@@ -41,6 +43,7 @@ export async function createAndStreamRun(input: {
     threadId: input.threadId,
     role: "user",
     content: input.message,
+    ideState: input.attachedContext ?? null,
   })
 
   let seq = 0
@@ -68,6 +71,7 @@ export async function createAndStreamRun(input: {
       userInput: input.message,
       history,
       overrides: input.overrides,
+      attachedContext: input.attachedContext ?? null,
     },
     signal: controller.signal,
     emit,

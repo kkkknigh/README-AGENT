@@ -59,12 +59,9 @@ syncChannel.addEventListener('message', (event: MessageEvent<SyncMessage>) => {
             queryClient.invalidateQueries({ queryKey: ['documents'] })
             break
         case 'RELOAD_SESSIONS':
-            // 如果提供了 pdfId，则只失效该 PDF 的会话列表；否则失效所有会话列表
-            if (payload?.pdfId) {
-                queryClient.invalidateQueries({ queryKey: chatKeys.sessions(payload.pdfId) })
-            } else {
-                queryClient.invalidateQueries({ queryKey: [...chatKeys.all, 'sessions'] })
-            }
+            // 会话列表已切换为独立线程视图，统一刷新全部会话缓存。
+            queryClient.invalidateQueries({ queryKey: chatKeys.sessions('all') })
+            queryClient.invalidateQueries({ queryKey: [...chatKeys.all, 'all-sessions'] })
             break
         case 'RELOAD_MESSAGES':
             if (payload?.sessionId) {

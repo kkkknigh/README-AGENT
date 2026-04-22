@@ -47,6 +47,7 @@ export interface LocalChatMessageDto {
   thoughts?: string[]
   steps?: Array<{ text: string; status: "done" | "running" }>
   attachments?: Array<Record<string, unknown>>
+  ideState?: WorkbenchContextDto | null
   runId?: string | null
 }
 
@@ -62,11 +63,22 @@ export interface WorkbenchTabDto {
   updatedAt: string
 }
 
+export interface WorkbenchOpenTabSummaryDto {
+  id: string
+  type: WorkbenchTabType
+  resourceRemoteId: string | null
+  title: string
+}
+
 export interface WorkbenchContextDto {
   scope: "global" | "workspace" | "document"
   workspaceId: string | null
   documentRemoteId: string | null
+  currentReadingDocumentId: string | null
   activeResourceType: WorkbenchTabType | null
+  activeTabId: string | null
+  activeTabTitle: string | null
+  openTabs: WorkbenchOpenTabSummaryDto[]
 }
 
 export interface SyncStatusDto {

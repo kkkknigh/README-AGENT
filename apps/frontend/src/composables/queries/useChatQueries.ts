@@ -51,13 +51,6 @@ type SessionListItem = {
     messageCount: number
 }
 
-function matchesSessionScope(session: Partial<SessionListItem>, context: ChatSessionContext) {
-    if (session.scope !== context.scope) return false
-    if (context.scope === 'workspace') return (session.workspaceId ?? null) === (context.workspaceId ?? null)
-    if (context.scope === 'document') return (session.pdfId ?? '') === (context.documentRemoteId ?? '')
-    return true
-}
-
 function normalizeSessionRecord(s: {
     id: string
     pdfId?: string
@@ -86,13 +79,12 @@ function normalizeSessionRecord(s: {
 export function useSessionsQuery(context: MaybeRefOrGetter<ChatSessionContext>) {
     const queryClient = useQueryClient()
     return useQuery({
-        queryKey: computed(() => chatKeys.sessions(toValue(context))),
+        queryKey: computed(() => chatKeys.sessions('all')),
         queryFn: async () => {
             const resolved = toValue(context)
-            if (!queryClient.getQueryData(chatKeys.sessions(resolved))) {
+            if (!queryClient.getQueryData(chatKeys.sessions('all'))) {
                 const allCached = await dbGetAll(STORES.CHAT_SESSIONS).catch(() => [])
-                const scopedSessions = allCached.filter((s: any) => matchesSessionScope(s, resolved))
-                if (scopedSessions.length) return scopedSessions
+                if (allCached.length) return allCached
             }
             const response = await chatSessionApi.listSessions(resolved)
             const sessions = response.sessions.map(normalizeSessionRecord)
@@ -141,6 +133,7 @@ export function useMessagesQuery(sessionId: Ref<string | null | undefined>) {
                 citations: m.citations || [],
                 thoughts: (m as any).thoughts || [],
                 steps: (m as any).steps || [],
+                ideState: (m as any).ideState ?? null,
                 images: (m.attachments || [])
                     .filter((att: any) => att?.category === 'image')
                     .map((att: any) => {
@@ -203,7 +196,7 @@ export function useCreateSessionMutation(context?: MaybeRefOrGetter<ChatSessionC
         mutationFn: () => chatSessionApi.createSession(context ? toValue(context) : undefined),
         onMutate: async () => {
             const resolved = context ? toValue(context) : { scope: 'global' as const }
-            const queryKey = chatKeys.sessions(resolved)
+            const queryKey = chatKeys.sessions('all')
             await queryClient.cancelQueries({ queryKey })
             const previous = queryClient.getQueryData<SessionListItem[]>(queryKey)
             const tempId = `temp_${Date.now()}`
@@ -227,6 +220,7 @@ export function useCreateSessionMutation(context?: MaybeRefOrGetter<ChatSessionC
                     old ? old.map(s => s.id === context.tempId ? { ...s, id: data.sessionId, title: data.title } : s) : old
                 )
             }
+            queryClient.invalidateQueries({ queryKey: [...chatKeys.all, 'all-sessions'] })
             broadcastSync('RELOAD_SESSIONS', undefined)
         },
     })
@@ -256,10 +250,12 @@ export function useDeleteSessionMutation() {
                 context.queries.forEach(([qk, qd]) => queryClient.setQueryData(qk, qd))
             }
             queryClient.invalidateQueries({ queryKey: [...chatKeys.all, 'sessions'] })
+            queryClient.invalidateQueries({ queryKey: [...chatKeys.all, 'all-sessions'] })
         },
         onSuccess: (_data, sessionId) => {
             queryClient.removeQueries({ queryKey: chatKeys.messages(sessionId) })
             dbDelete(STORES.CHAT_SESSIONS, sessionId).catch(console.warn)
+            queryClient.invalidateQueries({ queryKey: [...chatKeys.all, 'all-sessions'] })
             // 级联清理 IndexedDB 中该 session 的 proposals
             import('./useProposalQueries').then(({ clearProposalsForSession }) =>
                 clearProposalsForSession(sessionId)
@@ -317,6 +313,7 @@ export function useSendMessageMutation() {
             pruneFromId?: string
             contextText?: string
             images?: string[]
+            attachedContext?: import('@readmeclaw/shared-ui').WorkbenchContextDto
             signal?: AbortSignal
         }) => {
             streamFinalized.set(params.sessionId, false)
@@ -332,6 +329,7 @@ export function useSendMessageMutation() {
                 params.pruneFromId,
                 params.contextText,
                 params.images,
+                params.attachedContext,
                 (event) => {
                     // mutation 事件只刷新缓存，不影响聊天消息流
                     if (handleMutationEvent(queryClient, event)) return
@@ -383,6 +381,7 @@ export function useSendMessageMutation() {
                 content: variables.message,
                 timestamp: new Date(),
                 citations: [],
+                ideState: variables.attachedContext ?? null,
                 images: variables.images?.map(b64 => `data:image/png;base64,${b64}`)
             }
 

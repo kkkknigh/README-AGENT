@@ -1,6 +1,7 @@
-import type { LocalChatMessageDto, LocalChatThreadDto } from "@readmeclaw/shared-ui"
+import type { LocalChatMessageDto, LocalChatThreadDto, WorkbenchContextDto } from "@readmeclaw/shared-ui"
 import { nanoid } from "nanoid"
 import { db } from "../db/index.js"
+import { upsertMessageMeta } from "../repositories/message-meta-repo.js"
 import { nowIso } from "./time.js"
 
 export function listThreads(): LocalChatThreadDto[] {
@@ -95,6 +96,7 @@ export function listMessages(threadId: string): LocalChatMessageDto[] {
       meta.thoughts_json as thoughtsJson,
       meta.steps_json as stepsJson,
       meta.attachments_json as attachmentsJson,
+      meta.ide_state_json as ideStateJson,
       meta.run_id as runId
     FROM local_chat_messages m
     LEFT JOIN local_chat_message_meta meta ON meta.message_id = m.id
@@ -105,6 +107,7 @@ export function listMessages(threadId: string): LocalChatMessageDto[] {
     thoughtsJson?: string | null
     stepsJson?: string | null
     attachmentsJson?: string | null
+    ideStateJson?: string | null
   }>
 
   return rows.map((row) => ({
@@ -117,6 +120,7 @@ export function listMessages(threadId: string): LocalChatMessageDto[] {
     thoughts: row.thoughtsJson ? JSON.parse(row.thoughtsJson) : [],
     steps: row.stepsJson ? JSON.parse(row.stepsJson) : [],
     attachments: row.attachmentsJson ? JSON.parse(row.attachmentsJson) : [],
+    ideState: row.ideStateJson ? JSON.parse(row.ideStateJson) : null,
     runId: row.runId ?? null,
   }))
 }
@@ -125,6 +129,7 @@ export function createMessage(input: {
   threadId: string
   role: "user" | "assistant"
   content: string
+  ideState?: WorkbenchContextDto | null
 }): LocalChatMessageDto {
   const message: LocalChatMessageDto = {
     id: nanoid(),
@@ -132,11 +137,18 @@ export function createMessage(input: {
     role: input.role,
     content: input.content,
     createdAt: nowIso(),
+    ideState: input.ideState ?? null,
   }
   db.prepare(`
     INSERT INTO local_chat_messages (id, thread_id, role, content, created_at)
     VALUES (@id, @threadId, @role, @content, @createdAt)
   `).run(message)
   db.prepare(`UPDATE local_chat_threads SET updated_at = ? WHERE id = ?`).run(message.createdAt, input.threadId)
+  if (input.ideState) {
+    upsertMessageMeta({
+      messageId: message.id,
+      ideStateJson: JSON.stringify(input.ideState),
+    })
+  }
   return message
 }

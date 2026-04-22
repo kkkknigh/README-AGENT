@@ -28,3 +28,8 @@ if (ftsColumns.length > 0 && !ftsColumns.some((column) => column.name === "page_
     FROM document_chunks
   `).run()
 }
+
+const messageMetaColumns = db.prepare(`PRAGMA table_info(local_chat_message_meta)`).all() as Array<{ name: string }>
+if (!messageMetaColumns.some((column) => column.name === "ide_state_json")) {
+  db.exec(`ALTER TABLE local_chat_message_meta ADD COLUMN ide_state_json TEXT;`)
+}

@@ -1,5 +1,5 @@
 import type { AgentRunMode, AgentRunRecord } from "../repositories/runs-repo.js"
-import type { LocalChatThreadDto } from "@readmeclaw/shared-ui"
+import type { LocalChatThreadDto, WorkbenchContextDto } from "@readmeclaw/shared-ui"
 
 export interface RuntimeRequestOverrides {
   model?: string | null
@@ -10,6 +10,9 @@ export interface RuntimeRequestOverrides {
 export interface AgentContext {
   scope: "global" | "workspace" | "document"
   thread: LocalChatThreadDto
+  ideState: WorkbenchContextDto | null
+  effectiveWorkspaceId: string | null
+  effectiveDocumentId: string | null
   global?: Record<string, unknown>
   workspace?: Record<string, unknown>
   document?: Record<string, unknown>
@@ -24,6 +27,7 @@ export interface RuntimeExecutionInput {
   userInput: string
   history: Array<{ role: "user" | "assistant"; content: string }>
   overrides: RuntimeRequestOverrides
+  attachedContext?: WorkbenchContextDto | null
 }
 
 export interface PlanningResult {
