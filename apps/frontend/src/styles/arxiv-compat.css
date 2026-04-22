@@ -1,0 +1,463 @@
+/*
+ * arXiv / ar5iv 兼容 CSS
+ *
+ * 从 ar5iv.0.8.4.css + arxiv-html-papers-theme 中提取的表格、公式、排版规则。
+ * 用于渲染从 arxiv.org/html/ 抓取的论文 HTML（带 ltx_* class）。
+ *
+ * 所有颜色使用项目 CSS 变量，自动适配 light / dark 主题。
+ */
+
+/* ================================================================
+ *  基础排版（ltx_document / ltx_page）
+ * ================================================================ */
+
+.html-viewer__content .ltx_document,
+.html-viewer__content article {
+  text-rendering: optimizeLegibility;
+}
+
+.html-viewer__content .ltx_para {
+  text-align: justify;
+  text-justify: inter-word;
+  hyphens: auto;
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+.html-viewer__content .ltx_p {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* ================================================================
+ *  标题
+ * ================================================================ */
+
+.html-viewer__content .ltx_title.ltx_title_document {
+  font-size: 1.7rem;
+  font-weight: normal;
+  text-align: center;
+  margin: 1rem 0 1.5rem;
+  text-wrap: balance;
+}
+
+.html-viewer__content .ltx_title_section {
+  font-size: 1.4rem;
+  font-weight: bold;
+  margin-bottom: 1.5rem;
+}
+
+.html-viewer__content .ltx_title_subsection {
+  font-size: 1.2rem;
+  font-weight: bold;
+  margin-bottom: 1rem;
+}
+
+.html-viewer__content .ltx_title_subsubsection {
+  font-size: 1.05rem;
+  font-weight: bold;
+  margin-bottom: 0.75rem;
+}
+
+.html-viewer__content .ltx_section,
+.html-viewer__content .ltx_subsection,
+.html-viewer__content .ltx_subsubsection {
+  margin-top: 1.5rem;
+}
+
+.html-viewer__content .ltx_tag_section,
+.html-viewer__content .ltx_tag_subsection,
+.html-viewer__content .ltx_tag_subsubsection {
+  padding-right: 0.4rem;
+}
+
+/* ================================================================
+ *  表格 — 核心（完全复刻 arXiv）
+ * ================================================================ */
+
+/* 表格容器 */
+.html-viewer__content .ltx_table {
+  display: block;
+  width: 100%;
+  text-align: center;
+  margin: 2rem auto;
+  max-width: 100%;
+}
+
+.html-viewer__content .ltx_table:not(:has(> .ltx_flex_table)) {
+  overflow-x: auto;
+  overflow-y: visible;
+  scrollbar-width: none;  /* 无法加 .scrollbar-none 类，arXiv HTML 不受控 */
+}
+
+/* 表格本体 */
+.html-viewer__content .ltx_tabular {
+  display: inline-table;
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  font-size: 0.9em;
+}
+
+.html-viewer__content .ltx_tabular.ltx_centering {
+  display: table;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* 行组 & 行 */
+.html-viewer__content .ltx_thead,
+.html-viewer__content .ltx_tfoot,
+.html-viewer__content .ltx_tbody {
+  display: table-row-group;
+}
+
+.html-viewer__content .ltx_tr {
+  display: table-row;
+}
+
+/* 单元格 */
+.html-viewer__content .ltx_td,
+.html-viewer__content .ltx_th {
+  display: table-cell;
+}
+
+.html-viewer__content .ltx_tabular .ltx_td,
+.html-viewer__content .ltx_tabular .ltx_th {
+  padding: 0.1em 0.5em;
+  max-width: 780px;
+  word-break: keep-all;
+  overflow-wrap: normal;
+  overflow: visible;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.html-viewer__content .ltx_tabular .ltx_td.ltx_nopad_l,
+.html-viewer__content .ltx_tabular .ltx_th.ltx_nopad_l {
+  padding-left: 0;
+}
+
+.html-viewer__content .ltx_tabular .ltx_td.ltx_nopad_r,
+.html-viewer__content .ltx_tabular .ltx_th.ltx_nopad_r {
+  padding-right: 0;
+}
+
+/* 列头 nowrap */
+.html-viewer__content .ltx_tabular .ltx_th.ltx_th_column {
+  white-space: nowrap;
+}
+
+/* 最小行高 */
+.html-viewer__content .ltx_tabular .ltx_tr td:first-child::after,
+.html-viewer__content .ltx_tabular .ltx_tr th:first-child::after {
+  content: "";
+  display: inline-block;
+  vertical-align: top;
+  min-height: 1em;
+}
+
+/* ================================================================
+ *  表格对齐
+ * ================================================================ */
+
+.html-viewer__content .ltx_align_left   { text-align: left; }
+.html-viewer__content .ltx_align_right  { text-align: right; }
+.html-viewer__content .ltx_align_center { text-align: center; }
+.html-viewer__content .ltx_align_justify {
+  text-align: justify;
+  text-justify: inter-word;
+  hyphens: auto;
+}
+.html-viewer__content .ltx_align_top      { vertical-align: top; }
+.html-viewer__content .ltx_align_bottom   { vertical-align: bottom; }
+.html-viewer__content .ltx_align_middle   { vertical-align: middle; }
+.html-viewer__content .ltx_align_baseline { vertical-align: baseline; }
+
+/* 有对齐 class 的单元格默认 nowrap */
+.html-viewer__content .ltx_td.ltx_align_left,
+.html-viewer__content .ltx_th.ltx_align_left,
+.html-viewer__content .ltx_td.ltx_align_right,
+.html-viewer__content .ltx_th.ltx_align_right,
+.html-viewer__content .ltx_td.ltx_align_center,
+.html-viewer__content .ltx_th.ltx_align_center {
+  white-space: nowrap;
+}
+
+/* 显式 wrap 覆盖 */
+.html-viewer__content .ltx_td.ltx_wrap,
+.html-viewer__content .ltx_th.ltx_wrap,
+.html-viewer__content .ltx_td.ltx_align_justify,
+.html-viewer__content .ltx_th.ltx_align_justify {
+  white-space: normal;
+}
+
+/* ================================================================
+ *  表格边框（booktabs 风格）
+ * ================================================================ */
+
+/* 实线 */
+.html-viewer__content .ltx_border_t  { border-top:    1px solid var(--c-text-heading); }
+.html-viewer__content .ltx_border_r  { border-right:  1px solid var(--c-text-heading); }
+.html-viewer__content .ltx_border_b  { border-bottom: 1px solid var(--c-text-heading); }
+.html-viewer__content .ltx_border_l  { border-left:   1px solid var(--c-text-heading); }
+
+/* 双线 */
+.html-viewer__content .ltx_border_tt { border-top:    3px double var(--c-text-heading); }
+.html-viewer__content .ltx_border_rr { border-right:  3px double var(--c-text-heading); }
+.html-viewer__content .ltx_border_bb { border-bottom: 3px double var(--c-text-heading); }
+.html-viewer__content .ltx_border_ll { border-left:   3px double var(--c-text-heading); }
+
+/* 浅色线 */
+.html-viewer__content .ltx_border_T  { border-top:    1px solid var(--c-border); }
+.html-viewer__content .ltx_border_R  { border-right:  1px solid var(--c-border); }
+.html-viewer__content .ltx_border_B  { border-bottom: 1px solid var(--c-border); }
+.html-viewer__content .ltx_border_L  { border-left:   1px solid var(--c-border); }
+
+/* 虚线 */
+.html-viewer__content .ltx_border_r_dashed { border-right:  1px dashed var(--c-text-heading); }
+.html-viewer__content .ltx_border_b_dashed { border-bottom: 1px dashed var(--c-text-heading); }
+
+/* ================================================================
+ *  表格并排 (flex)
+ * ================================================================ */
+
+.html-viewer__content .ltx_flex_table {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1em;
+}
+
+.html-viewer__content .ltx_flex_cell {
+  flex: 0 1 auto;
+}
+
+/* ================================================================
+ *  表格 caption
+ * ================================================================ */
+
+.html-viewer__content .ltx_table .ltx_caption,
+.html-viewer__content .ltx_figure .ltx_caption {
+  text-align: justify;
+  line-height: 1.5;
+  margin: 1rem auto;
+  max-width: max-content;
+}
+
+.html-viewer__content .ltx_tag_table,
+.html-viewer__content .ltx_tag_figure {
+  display: inline-block;
+  padding-right: 0.2rem;
+  min-width: 1.33em;
+  font-weight: bold;
+}
+
+/* ================================================================
+ *  公式 / 方程
+ * ================================================================ */
+
+.html-viewer__content .ltx_eqn_table {
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.65rem auto;
+}
+
+.html-viewer__content .ltx_eqn_row {
+  display: table-row;
+}
+
+.html-viewer__content .ltx_eqn_cell {
+  display: table-cell;
+  width: auto;
+  padding: 0.3rem 0.2rem;
+}
+
+.html-viewer__content .ltx_eqn_cell.ltx_eqn_eqno {
+  width: 3em;
+  white-space: nowrap;
+}
+
+.html-viewer__content .ltx_eqn_center_padleft,
+.html-viewer__content .ltx_eqn_center_padright {
+  width: 50%;
+  min-width: 2em;
+}
+
+/* ================================================================
+ *  Figure
+ * ================================================================ */
+
+.html-viewer__content :not(.ltx_flex_cell) > .ltx_figure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin: 2rem auto;
+}
+
+.html-viewer__content .ltx_graphics {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ================================================================
+ *  数学 (MathML)
+ * ================================================================ */
+
+.html-viewer__content .ltx_Math,
+.html-viewer__content math {
+  font-family: "STIX Two Math", "Cambria Math", math;
+  color: var(--c-text-primary);
+}
+
+/* ================================================================
+ *  文本修饰
+ * ================================================================ */
+
+.html-viewer__content .ltx_font_bold,
+.html-viewer__content .ltx_text .ltx_font_bold {
+  font-weight: bold;
+}
+
+.html-viewer__content .ltx_font_italic,
+.html-viewer__content .ltx_text .ltx_font_italic {
+  font-style: italic;
+}
+
+.html-viewer__content .ltx_font_smallcaps {
+  font-variant: small-caps;
+}
+
+.html-viewer__content .ltx_font_typewriter {
+  font-family: var(--font-mono);
+}
+
+.html-viewer__content .ltx_centering {
+  text-align: center;
+}
+
+/* ================================================================
+ *  引用 / 参考文献
+ * ================================================================ */
+
+.html-viewer__content .ltx_cite {
+  font-style: normal;
+}
+
+.html-viewer__content .ltx_biblist {
+  list-style: none;
+  padding-left: 0;
+}
+
+.html-viewer__content .ltx_bibitem {
+  margin: 0.5em 0;
+  padding-left: 2em;
+  text-indent: -2em;
+}
+
+.html-viewer__content .ltx_tag_bibitem {
+  font-weight: bold;
+  padding-right: 0.3em;
+}
+
+/* ================================================================
+ *  摘要 / 关键词
+ * ================================================================ */
+
+.html-viewer__content .ltx_abstract {
+  margin: 1.5rem auto;
+  max-width: 90%;
+}
+
+.html-viewer__content .ltx_abstract .ltx_title {
+  font-weight: bold;
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
+/* ================================================================
+ *  脚注
+ * ================================================================ */
+
+.html-viewer__content .ltx_note_content {
+  font-size: 0.85em;
+  color: var(--c-text-secondary);
+}
+
+/* ================================================================
+ *  变换容器（arXiv 缩放大表格）
+ * ================================================================ */
+
+.html-viewer__content .ltx_transformed_outer {
+  display: inline-block;
+  overflow-x: auto;
+  overflow-y: visible;
+  max-width: 100%;
+  scrollbar-width: none;
+}
+
+/* 含表格的 transform 容器：覆盖 arXiv 内联样式，解除缩放 */
+.html-viewer__content .ltx_transformed_outer:has(> .ltx_transformed_inner > table) {
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+  overflow-x: auto;
+  overflow-y: visible;
+  max-width: 100%;
+  scrollbar-width: none;  /* 无法加 .scrollbar-none 类，arXiv HTML 不受控 */
+}
+.html-viewer__content .ltx_transformed_outer > .ltx_transformed_inner:has(> table) {
+  transform: none !important;
+  display: block !important;
+  width: auto !important;
+}
+
+.html-viewer__content .ltx_inline-block {
+  display: inline-block;
+}
+
+/* ================================================================
+ *  定理 / 证明
+ * ================================================================ */
+
+.html-viewer__content .ltx_theorem {
+  margin: 1rem 0;
+  font-style: italic;
+}
+
+.html-viewer__content .ltx_theorem .ltx_title {
+  font-style: normal;
+  font-weight: bold;
+}
+
+.html-viewer__content .ltx_proof {
+  margin: 1rem 0;
+}
+
+.html-viewer__content .ltx_proof .ltx_title {
+  font-style: italic;
+  font-weight: normal;
+}
+
+/* ================================================================
+ *  列表
+ * ================================================================ */
+
+.html-viewer__content .ltx_itemize,
+.html-viewer__content .ltx_enumerate {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+
+.html-viewer__content .ltx_item {
+  margin: 0.3em 0;
+}
+
+.html-viewer__content .ltx_tag_item {
+  display: inline-block;
+  min-width: 1.5em;
+  text-align: right;
+  padding-right: 0.3em;
+}

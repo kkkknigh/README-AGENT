@@ -1,0 +1,24 @@
+/*
+ * ============================================================
+ *  样式入口 — 按顺序加载所有全局样式
+ * ============================================================
+ *  CSS 规范要求 @import 必须在所有其他规则之前。
+ *  postcss-import 会先内联所有 @import，然后 Tailwind 展开 @tailwind。
+ *  最终产出顺序：imports → @tailwind base → @tailwind components → @tailwind utilities
+ * ============================================================
+ */
+
+/* ---- @import 必须全部在最前面 ---- */
+@import '@vue-flow/core/dist/style.css';
+@import '@vue-flow/core/dist/theme-default.css';
+@import '@vue-flow/controls/dist/style.css';
+@import './fonts.css';
+@import './tokens.css';
+@import './base.css';
+@import './components.css';
+@import './vendors.css';
+
+/* ---- Tailwind Directives ---- */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

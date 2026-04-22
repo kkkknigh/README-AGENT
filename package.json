@@ -1,0 +1,21 @@
+{
+  "name": "readmeclaw-local",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:frontend": "npm run dev --workspace @readmeclaw/frontend-app",
+    "dev:runtime": "npm run dev --workspace @readmeclaw/local-runtime",
+    "start:runtime": "npm run start --workspace @readmeclaw/local-runtime",
+    "build:runtime": "npm run build --workspace @readmeclaw/local-runtime",
+    "dev:desktop": "npm run tauri:dev --workspace @readmeclaw/desktop-app",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20.19 <21"
+  }
+}

@@ -1,0 +1,152 @@
+/*
+ * ============================================================
+ *  Vendors — 第三方库样式覆盖
+ * ============================================================
+ *  包含：KaTeX、Vue Flow、TipTap (ProseMirror)
+ *  规则：只覆盖第三方库的默认样式，不放自己的业务类
+ * ============================================================
+ */
+
+/* ============================================================
+ *  KaTeX 公式自定义样式
+ * ============================================================ */
+
+/* 块级公式容器 */
+.katex-display {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  margin: 1.5em 0;
+  padding: 1.1em 0.5em 1.6em;
+  scrollbar-width: thin;
+  scrollbar-gutter: stable both-edges;
+  box-sizing: border-box;
+}
+
+/* 公式元素基础样式 */
+.katex {
+  font-size: 1.05em;
+  display: inline-block;
+  vertical-align: middle;
+  line-height: 1.15;
+}
+
+.katex-html {
+  display: inline-block;
+  white-space: nowrap;
+  line-height: 1.15;
+}
+
+/* 块级公式居中 */
+.katex-display .katex {
+  display: block;
+  text-align: center;
+  margin: 0 auto;
+}
+
+.katex-display > .katex {
+  min-width: max-content;
+}
+
+/* 行内公式对齐 */
+p .katex {
+  vertical-align: -0.08em;
+}
+
+.markdown-body .katex,
+.markdown-body .katex-display {
+  max-width: 100%;
+}
+
+.markdown-body .katex-display {
+  overflow-y: hidden;
+}
+
+.markdown-body .katex-display > .katex {
+  min-width: max-content;
+}
+
+.markdown-body p .katex-display {
+  margin-top: 0.85em;
+  margin-bottom: 0.85em;
+}
+
+/* KaTeX 颜色修正 */
+.markdown-body .katex * {
+  border-color: currentColor;
+}
+
+/* KaTeX 滚动条（悬浮显示） */
+.katex-display::-webkit-scrollbar {
+  height: var(--scrollbar-width-thin);
+}
+
+.katex-display::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.katex-display::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 10px;
+  transition: background var(--duration-slow) var(--ease-default);
+}
+
+.katex-display:hover::-webkit-scrollbar-thumb {
+  background: var(--c-katex-scrollbar-thumb);
+}
+
+.katex-display::-webkit-scrollbar-thumb:hover {
+  background: var(--c-katex-scrollbar-thumb-hover);
+}
+
+/* KaTeX 上下标与纵向节奏 */
+.katex .base {
+  position: relative;
+  white-space: nowrap;
+}
+
+.katex .mfrac .vlist-t {
+  margin: 0 0.1em;
+}
+
+/* 分数线条粗细 */
+.katex .frac-line {
+  border-bottom-width: 0.04em;
+}
+
+/* 根号优化 */
+.katex .sqrt > .root {
+  font-size: 0.7em;
+}
+
+/* KaTeX 响应式 */
+@media (max-width: 640px) {
+  .katex {
+    font-size: 1em;
+  }
+  .katex-display {
+    padding: 0.85em 0.3em 1.25em;
+  }
+}
+
+/* ============================================================
+ *  Vue Flow 样式覆盖
+ * ============================================================ */
+
+.vue-flow__node {
+  border-radius: var(--radius-lg);
+  border-width: var(--border-width-2);
+  box-shadow: var(--shadow-xs);
+}
+
+/* ============================================================
+ *  TipTap / ProseMirror 样式覆盖
+ * ============================================================ */
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: var(--c-text-muted);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}

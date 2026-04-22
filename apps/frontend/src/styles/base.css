@@ -1,0 +1,116 @@
+/*
+ * ============================================================
+ *  Base — 全局重置 + html/body 基础 + 统一滚动条 + 选区
+ * ============================================================
+ *  规则：只放浏览器级别的默认行为样式，不放任何业务组件样式
+ * ============================================================
+ */
+
+/* -------------------- Global Reset -------------------- */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* -------------------- Root / Body -------------------- */
+:root {
+  font-family: var(--font-sans);
+  line-height: var(--leading-normal);
+  font-weight: var(--font-normal);
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* -------------------- Text Selection -------------------- */
+::selection {
+  background: var(--c-pdf-selection);
+}
+
+/* -------------------- Scrollbar (Global Default) -------------------- */
+::-webkit-scrollbar {
+  width: var(--scrollbar-width);
+  height: var(--scrollbar-width);
+}
+
+::-webkit-scrollbar-track {
+  background: var(--c-scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--c-scrollbar-thumb);
+  border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--c-scrollbar-hover);
+}
+
+/* -------------------- Thin Scrollbar Variant -------------------- */
+.scrollbar-thin::-webkit-scrollbar {
+  width: var(--scrollbar-width-thin);
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: var(--c-scrollbar-thumb);
+  border-radius: var(--radius-sm);
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: var(--c-scrollbar-hover);
+}
+
+/* -------------------- Hidden Scrollbar -------------------- */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* -------------------- Number Input Spinner Removal -------------------- */
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.no-spinner[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+/* -------------------- Line Clamp Utilities -------------------- */
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

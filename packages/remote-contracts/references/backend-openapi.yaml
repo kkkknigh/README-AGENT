@@ -1,0 +1,6949 @@
+openapi: 3.0.0
+info:
+  title: README PDF Reader API
+  description: README的OpenAPI文档
+  version: 1.2.0
+servers:
+  - url: http://localhost:5000/api
+    description: 本地开发环境
+security:
+  - BearerAuth: []
+paths:
+  /auth/register:
+    post:
+      tags:
+        - Auth
+      summary: 注册第 1 步 — 发送验证码
+      description: |
+        验证用户信息后，向邮箱发送 6 位数字验证码。
+        启用邀请码功能时 inviteCode 为必填。
+        限流: 3 次/分钟。
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '200':
+          description: 验证码已发送
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationCodeSentResponse'
+        '400':
+          description: |
+            请求参数错误，code 可能的值：
+            - `MISSING_BODY` — 请求体为空
+            - `MISSING_FIELDS` — 缺少 username / email / password
+            - `INVALID_USERNAME` — 用户名格式错误（2-30 字符，只允许字母/数字/中文/下划线/连字符）
+            - `PASSWORD_TOO_SHORT` — 密码少于 8 位
+            - `PASSWORD_WEAK` — 密码须包含至少一个字母和一个数字
+            - `INVALID_EMAIL` — 邮箱格式错误
+            - `EMAIL_EXISTS` — 邮箱已被注册
+            - `MISSING_INVITE_CODE` — 邀请码为空（启用邀请码功能时）
+            - `INVALID_INVITE_CODE` — 邀请码无效
+            - `EMAIL_SEND_FAILED` — 验证码邮件发送失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: |
+            - `CODE_COOLDOWN` — 请求过于频繁，请稍后重试
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /auth/verify-register:
+    post:
+      tags:
+        - Auth
+      summary: 注册第 2 步 — 验证码校验并创建用户
+      description: |
+        提交邮箱验证码完成注册，成功后返回 accessToken，
+        并通过 HttpOnly Cookie 写入 refreshToken。
+        限流: 5 次/分钟。
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyRegisterRequest'
+      responses:
+        '201':
+          description: 注册成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+          headers:
+            Set-Cookie:
+              description: 写入 refreshToken HttpOnly Cookie
+              schema:
+                type: string
+        '400':
+          description: |
+            code 可能的值：
+            - `MISSING_BODY` — 请求体为空
+            - `MISSING_FIELDS` — 缺少 email / code
+            - `EXPIRED_OR_NOT_FOUND` — 验证码已过期或未发起注册
+            - `INVALID_CODE` — 验证码错误
+            - `TOO_MANY_ATTEMPTS` — 尝试次数过多，请重新注册
+            - `EMAIL_EXISTS` — 邮箱已被注册（并发场景）
+            - `REGISTRATION_FAILED` — 注册失败，请重试
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /auth/resend-code:
+    post:
+      tags:
+        - Auth
+      summary: 重发验证码
+      description: |
+        注册或重置密码时重新发送验证码。
+        限流: 1 次/分钟。
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResendCodeRequest'
+      responses:
+        '200':
+          description: 新验证码已发送
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationCodeSentResponse'
+        '400':
+          description: |
+            code 可能的值：
+            - `MISSING_BODY` — 请求体为空
+            - `MISSING_FIELDS` — 缺少 email
+            - `INVALID_PURPOSE` — purpose 必须是 register 或 reset
+            - `NOT_FOUND` — 未找到待处理的请求
+            - `EMAIL_SEND_FAILED` — 邮件发送失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: |
+            - `CODE_COOLDOWN` — 请求过于频繁
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      summary: 用户登录
+      description: '限流: 5 次/分钟。'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 登录成功，Cookie 中写入 refreshToken
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+          headers:
+            Set-Cookie:
+              description: 写入 refreshToken HttpOnly Cookie
+              schema:
+                type: string
+        '400':
+          description: |
+            请求参数错误，code 可能的值：
+            - `MISSING_BODY` — 请求体为空
+            - `MISSING_FIELDS` — 缺少 email / password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: |
+            认证失败，code 的值：
+            - `INVALID_CREDENTIALS` — 邮箱不存在或密码错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /auth/forgot-password:
+    post:
+      tags:
+        - Auth
+      summary: 忘记密码第 1 步 — 发送验证码
+      description: |
+        向邮箱发送密码重置验证码。
+        无论邮箱是否存在均返回相同响应（防枚举攻击）。
+        限流: 3 次/分钟。
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+      responses:
+        '200':
+          description: 若邮箱存在则发送验证码
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleMessageResponse'
+        '400':
+          description: |
+            code 可能的值：
+            - `MISSING_BODY` — 请求体为空
+            - `MISSING_FIELDS` — 缺少 email
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /auth/reset-password:
+    post:
+      tags:
+        - Auth
+      summary: 忘记密码第 2 步 — 验证码 + 新密码
+      description: '限流: 5 次/分钟。'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: 密码重置成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleMessageResponse'
+        '400':
+          description: |
+            code 可能的值：
+            - `MISSING_BODY` — 请求体为空
+            - `MISSING_FIELDS` — 缺少 email / code / newPassword
+            - `PASSWORD_TOO_SHORT` — 新密码少于 8 位
+            - `PASSWORD_WEAK` — 新密码须包含字母和数字
+            - `EXPIRED_OR_NOT_FOUND` — 验证码过期或未找到
+            - `INVALID_CODE` — 验证码错误
+            - `TOO_MANY_ATTEMPTS` — 尝试次数过多
+            - `USER_NOT_FOUND` — 用户不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /auth/refresh:
+    post:
+      tags:
+        - Auth
+      summary: 刷新 Access Token
+      security: []
+      description: |
+        使用 Refresh Token 换取新的 Access Token；默认依赖后端写入的 HttpOnly Cookie 自动携带。
+        限流: 30 次/分钟。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: 返回新的 Access Token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponse'
+        '400':
+          description: |
+            请求参数错误，code 的值：
+            - `MISSING_TOKEN` — 缺少 refreshToken
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: |
+            Refresh Token 无效，code 可能的值：
+            - `INVALID_REFRESH_TOKEN` — Token 无效或已过期
+            - `USER_NOT_FOUND` — 用户已被删除
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /auth/logout:
+    post:
+      tags:
+        - Auth
+      summary: 用户登出
+      description: 清除 refreshToken Cookie。JWT 可选（已登录或未登录均可调用）。
+      security:
+        - BearerAuth: []
+        - {}
+      responses:
+        '200':
+          description: 登出成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleMessageResponse'
+          headers:
+            Set-Cookie:
+              description: 清除 refreshToken Cookie
+              schema:
+                type: string
+  /auth/me:
+    get:
+      tags:
+        - Auth
+      summary: 获取当前用户信息
+      security:
+        - BearerAuth: []
+      description: 需要有效的 Access Token。返回用户基础资料（含头像、简介、偏好设置）。
+      responses:
+        '200':
+          description: 用户信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+        '401':
+          description: 未登录或 Token 无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: |
+            code 的值：
+            - `USER_NOT_FOUND` — 用户不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags:
+        - Auth
+      summary: 更新当前用户资料
+      security:
+        - BearerAuth: []
+      description: 可更新 username、bio、avatarUrl、preferences，均为可选字段。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MeUpdateRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+        '400':
+          description: 请求体缺失或参数校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 用户不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /auth/password:
+    put:
+      tags:
+        - Auth
+      summary: 修改当前用户密码
+      description: |
+        修改成功后签发新 Token，旧 Token 在前端被替换。Cookie 中更新 refreshToken。
+        限流: 5 次/分钟。
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordChangeRequest'
+      responses:
+        '200':
+          description: 修改成功，返回新 accessToken
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordChangeResponse'
+          headers:
+            Set-Cookie:
+              description: 更新 refreshToken Cookie
+              schema:
+                type: string
+        '400':
+          description: |
+            code 可能的值：
+            - `MISSING_BODY` — 请求体为空
+            - `MISSING_FIELDS` — 缺少 oldPassword / newPassword
+            - `PASSWORD_TOO_SHORT` — 新密码少于 8 位
+            - `PASSWORD_WEAK` — 新密码须包含字母和数字
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 当前密码错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 用户不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /auth/stats:
+    get:
+      tags:
+        - Auth
+      summary: 获取当前用户统计信息
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 用户统计信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatsResponse'
+        '404':
+          description: 用户不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /auth/account:
+    delete:
+      tags:
+        - Auth
+      summary: 删除当前用户账号
+      description: '删除成功后清除 refreshToken Cookie。限流: 3 次/分钟。'
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountDeleteRequest'
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleMessageResponse'
+          headers:
+            Set-Cookie:
+              description: 清除 refreshToken Cookie
+              schema:
+                type: string
+        '400':
+          description: 缺少密码
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 密码错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 用户不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /upload/upload:
+    post:
+      tags:
+        - PDF
+      summary: 上传PDF文件
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 仅支持上传PDF文件
+              required:
+                - file
+      responses:
+        '200':
+          description: 上传成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '400':
+          description: 请求参数错误 (文件缺失、文件名为空或格式非 PDF)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /upload/import-link:
+    post:
+      tags:
+        - PDF
+      summary: 通过链接导入文献
+      security:
+        - BearerAuth: []
+      description: 支持 DOI、arXiv、直接 PDF 链接，以及常见论文落地页。后端会解析输入、下载 PDF，并复用现有文献导入链路。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportLinkRequest'
+      responses:
+        '200':
+          description: 导入成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportLinkResponse'
+        '400':
+          description: 输入为空、链接不安全或无法解析出 PDF
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /upload/{pdf_id}/status:
+    get:
+      tags:
+        - PDF
+      summary: 获取PDF处理状态
+      security:
+        - BearerAuth: []
+      description: 获取PDF处理状态，包括任务状态、处理进度等。目前前端代码还没用这个接口，还没加异步轮询。
+      parameters:
+        - name: pdf_id
+          in: path
+          required: true
+          description: PDF文件Hash
+          schema:
+            type: string
+        - name: from_page
+          in: query
+          required: false
+          description: 从第几页开始返回段落，默认从第一页开始
+          schema:
+            type: integer
+            default: 1
+            example: 1
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /paper/{pdf_id}/content:
+    get:
+      tags:
+        - PDF
+      summary: 获取PDF段落
+      security:
+        - BearerAuth: []
+      description: 使用场景：在pdf某页前端的段落翻译需要所有的id，bbox和content
+      parameters:
+        - name: pdf_id
+          in: path
+          required: true
+          description: PDF文件Hash
+          schema:
+            type: string
+        - name: page
+          in: query
+          required: false
+          description: 指定页码，不传则返回全部页
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParagraphList'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /paper/{pdf_id}/layout:
+    get:
+      tags:
+        - PDF
+      summary: 获取 PDF 布局覆盖层
+      security:
+        - BearerAuth: []
+      description: 获取前端用于显示图片、表格、公式框的归一化布局数据
+      parameters:
+        - name: pdf_id
+          in: path
+          required: true
+          description: PDF文件Hash
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LayoutResponse'
+        '404':
+          description: PDF不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /paper/{pdf_id}/overlay/explain:
+    post:
+      tags:
+        - PDF
+      summary: Explain a PDF overlay region
+      security:
+        - BearerAuth: []
+      description: Crop the selected overlay region from the PDF page and generate an explanation with nearby paragraph context.
+      parameters:
+        - name: pdf_id
+          in: path
+          required: true
+          description: PDF file hash
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExplainOverlayRequest'
+      responses:
+        '200':
+          description: Explanation generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExplainOverlayResponse'
+        '400':
+          description: Invalid page, kind, or bboxNorm
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: PDF not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Image analysis failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /paper/{pdf_id}/overlay/chat:
+    post:
+      tags:
+        - PDF
+      summary: Chat about a PDF overlay region
+      security:
+        - BearerAuth: []
+      description: Crop the selected overlay region, attach nearby paragraph context, and run a focused multimodal follow-up chat for this region.
+      parameters:
+        - name: pdf_id
+          in: path
+          required: true
+          description: PDF file hash
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OverlayChatRequest'
+      responses:
+        '200':
+          description: Overlay chat response generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverlayChatResponse'
+        '400':
+          description: Invalid page, kind, bboxNorm, or message
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: PDF not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /paper/{pdf_id}/image/{image_index}:
+    get:
+      tags:
+        - PDF
+      summary: 获取指定图片数据
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: pdf_id
+          in: path
+          required: true
+          description: PDF 文件 Hash
+          schema:
+            type: string
+        - name: image_index
+          in: path
+          required: true
+          description: 图片索引
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PdfImageResponse'
+        '404':
+          description: 图片不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /library/:
+    get:
+      tags:
+        - Library
+      summary: 获取当前用户的文献库列表
+      security:
+        - BearerAuth: []
+      description: |
+        Flask 路由: GET /library/
+        返回当前登录用户文献库中的文献列表，支持分页、按分组筛选以及标题关键字搜索。
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: 页码（从 1 开始）
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          description: 每页返回的文献数量
+          schema:
+            type: integer
+            default: 50
+        - name: group
+          in: query
+          required: false
+          description: 按标签/分组筛选，不传则不过滤
+          schema:
+            type: string
+        - name: keyword
+          in: query
+          required: false
+          description: 按标题模糊搜索关键字
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 文献库列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryListResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /library/{pdf_id}/tags:
+    post:
+      tags:
+        - Library
+      summary: 为文献添加标签
+      security:
+        - BearerAuth: []
+      description: 'Flask 路由: POST /library/<pdf_id>/tags'
+      parameters:
+        - name: pdf_id
+          in: path
+          required: true
+          description: PDF 文件 Hash
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LibraryTagRequest'
+      responses:
+        '200':
+          description: 添加成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryActionResponse'
+        '400':
+          description: 缺少 tag 字段
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /library/{pdf_id}/tags/{tag}:
+    delete:
+      tags:
+        - Library
+      summary: 移除文献的标签
+      security:
+        - BearerAuth: []
+      description: 'Flask 路由: DELETE /library/<pdf_id>/tags/<tag>'
+      parameters:
+        - name: pdf_id
+          in: path
+          required: true
+          description: PDF 文件 Hash
+          schema:
+            type: string
+        - name: tag
+          in: path
+          required: true
+          description: 要移除的标签名
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 移除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryActionResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /library/{pdf_id}:
+    delete:
+      tags:
+        - Library
+      summary: 从用户文献库中移除文献
+      security:
+        - BearerAuth: []
+      description: 'Flask 路由: DELETE /library/<pdf_id>，仅解除用户与文献的关联，不删除物理文件'
+      parameters:
+        - name: pdf_id
+          in: path
+          required: true
+          description: PDF 文件 Hash
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryActionResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /library/{pdf_id}/source:
+    get:
+      tags:
+        - Library
+      summary: 获取PDF源文件
+      security:
+        - BearerAuth: []
+      description: 获取PDF源文件，用于浏览器直接预览/渲染
+      parameters:
+        - name: pdf_id
+          in: path
+          required: true
+          description: PDF文件Hash
+          schema:
+            type: string
+      responses:
+        '200':
+          description: PDF文件二进制流
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: 文件不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /library/{pdf_id}/title:
+    put:
+      tags:
+        - Library
+      summary: 重命名文献标题
+      security:
+        - BearerAuth: []
+      description: 'Flask 路由: PUT /library/<pdf_id>/title'
+      parameters:
+        - name: pdf_id
+          in: path
+          required: true
+          description: PDF 文件 Hash
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+              properties:
+                title:
+                  type: string
+                  description: 新标题
+      responses:
+        '200':
+          description: 重命名成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  pdfId:
+                    type: string
+                  title:
+                    type: string
+        '400':
+          description: 缺少 title 字段
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 重命名失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /library/batch-delete:
+    post:
+      tags:
+        - Library
+      summary: 批量删除论文
+      security:
+        - BearerAuth: []
+      description: |
+        批量从用户文献库中移除文献（上限 50 条）。
+        Flask 路由: POST /library/batch-delete
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - pdf_ids
+              properties:
+                pdf_ids:
+                  type: array
+                  maxItems: 50
+                  items:
+                    type: string
+                  description: 要删除的 PDF 文件 Hash 列表
+      responses:
+        '200':
+          description: 批量删除结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: integer
+                    description: 成功删除数量
+                  failed:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        pdf_id:
+                          type: string
+                        error:
+                          type: string
+        '400':
+          description: 参数校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /library/batch-tag:
+    patch:
+      tags:
+        - Library
+      summary: 批量标签管理
+      security:
+        - BearerAuth: []
+      description: |
+        批量对多篇文献执行添加/移除标签操作（上限 50 项）。
+        Flask 路由: PATCH /library/batch-tag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - items
+              properties:
+                items:
+                  type: array
+                  maxItems: 50
+                  items:
+                    type: object
+                    required:
+                      - pdf_id
+                      - operations
+                    properties:
+                      pdf_id:
+                        type: string
+                      operations:
+                        type: array
+                        items:
+                          type: object
+                          required:
+                            - op
+                            - tags
+                          properties:
+                            op:
+                              type: string
+                              enum: [add, remove]
+                            tags:
+                              type: array
+                              items:
+                                type: string
+      responses:
+        '200':
+          description: 批量标签操作结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        pdf_id:
+                          type: string
+                        added:
+                          type: array
+                          items:
+                            type: string
+                        removed:
+                          type: array
+                          items:
+                            type: string
+                        skipped:
+                          type: array
+                          items:
+                            type: string
+                  failed:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        pdf_id:
+                          type: string
+                        error:
+                          type: string
+        '400':
+          description: 参数校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /paper/{pdf_id}/metadata:
+    get:
+      tags:
+        - Papers
+      summary: 获取论文元数据
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: pdf_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '404':
+          description: 论文不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /paper/{pdf_id}/content:
+    get:
+      tags:
+        - Papers
+      summary: 获取论文内容
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: pdf_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - markdown
+              - paragraphs
+            default: markdown
+        - name: pages
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 页码范围，格式示例 1-3
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '404':
+          description: 论文不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /paper/{pdf_id}/html:
+    get:
+      tags:
+        - Papers
+      summary: 获取论文 HTML 重排内容
+      description: 返回内联 HTML 内容（图片已编码为 base64 data URI）及段落映射。
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: pdf_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML 已就绪
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  html_content:
+                    type: string
+                    description: HTML 内容（图片已内联为 base64 data URI）
+                  mapping:
+                    type: object
+                    description: 段落映射（block_id ↔ paragraph_id）
+                  source:
+                    type: string
+                    description: HTML 来源标识
+                  status:
+                    type: string
+        '404':
+          description: HTML 尚未生成或不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    nullable: true
+                  source:
+                    type: string
+                    nullable: true
+                  error:
+                    type: string
+                    nullable: true
+  /paper/{pdf_id}/html/fetch:
+    post:
+      tags:
+        - Papers
+      summary: 触发 HTML 重排生成
+      description: 首次触发或失败后重启 HTML 重排生成任务。
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: pdf_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: 任务已分发
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task_id:
+                    type: string
+                  message:
+                    type: string
+        '500':
+          description: 分发失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /rag/search:
+    post:
+      tags:
+        - RAG
+      summary: 独立 RAG 检索
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - query
+              properties:
+                query:
+                  type: string
+                top_k:
+                  type: integer
+                  default: 10
+                  minimum: 1
+                  maximum: 50
+                file_hash:
+                  type: string
+                search_mode:
+                  type: string
+                  enum:
+                    - hybrid
+                    - dense
+                    - sparse
+                filters:
+                  type: object
+                  additionalProperties: true
+      responses:
+        '200':
+          description: 检索成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  total:
+                    type: integer
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /upload/batch-import:
+    post:
+      tags:
+        - Papers
+      summary: 批量导入论文
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - items
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      input:
+                        type: string
+      responses:
+        '202':
+          description: 已受理
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  batch_id:
+                    type: string
+                  total:
+                    type: integer
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /upload/batch-upload:
+    post:
+      tags:
+        - Papers
+      summary: 批量上传论文文件
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        '202':
+          description: 已受理
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  batch_id:
+                    type: string
+                  total:
+                    type: integer
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /paper/batch-enrich:
+    post:
+      tags:
+        - Papers
+      summary: 批量补全论文元数据
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - pdf_ids
+              properties:
+                pdf_ids:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '202':
+          description: 已受理
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  batch_id:
+                    type: string
+                  dispatched:
+                    type: integer
+                  skipped:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  task_ids:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /chatbox/attachments/upload:
+    post:
+      tags:
+        - Chat
+      summary: 预上传附件
+      security:
+        - BearerAuth: []
+      description: |
+        预上传外部文件（图片/文件），返回临时存储位置（COS key）。
+        上传后的附件可以在发送消息时通过 attachment_id 引用。
+
+        注意：引用文献库内容（段落/图片/笔记）不需要预上传，直接在消息中嵌入即可。
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: 要上传的文件列表（最多 10 个）
+      responses:
+        '200':
+          description: 上传成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttachmentUploadResponse'
+        '400':
+          description: 请求错误（如文件过大、格式不支持、数量超限等）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /chatbox/new:
+    post:
+      tags:
+        - Chat
+      summary: 创建新会话
+      security:
+        - BearerAuth: []
+      description: 仅生成前端会话ID，不写库。实际会话在第一次发送消息时懒创建。
+      responses:
+        '200':
+          description: 新会话信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NewSessionResponse'
+  /chatbox/agent:
+    post:
+      tags:
+        - Chat
+      summary: Agent 模式流式对话
+      security:
+        - BearerAuth: []
+      description: |
+        基于全量 Agent 工作流的 SSE 对话接口。
+        会持续返回步骤事件，最终以 final 事件返回完整回答。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageRequest'
+      responses:
+        '200':
+          description: SSE 事件流
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/StreamEvent'
+        '400':
+          description: 缺少 message 或 sessionId
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /chatbox/chat:
+    post:
+      tags:
+        - Chat
+      summary: Chat 模式流式对话
+      security:
+        - BearerAuth: []
+      description: |
+        基于受限问答工作流的 SSE 对话接口。
+        固定使用扩展只读工具集，可执行论文读取、笔记读取、外部学术检索与联网检索；不提供 skills，不形成用户记忆，也不执行修改操作。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageRequest'
+      responses:
+        '200':
+          description: SSE 事件流
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/StreamEvent'
+        '400':
+          description: 缺少 message 或 sessionId
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /chatbox/sessions:
+    get:
+      tags:
+        - Chat
+      summary: 获取会话列表
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: pdfId
+          in: query
+          required: false
+          description: 按 PDF 文件 Hash 过滤，不传则返回全部会话
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          description: 单词显示的对话数量上限，但是总的数据库并没有这个限制
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: 会话列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionListResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /chatbox/session/{session_id}:
+    delete:
+      tags:
+        - Chat
+      summary: 删除会话
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          description: 会话UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteSessionResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /chatbox/session/{session_id}/messages:
+    get:
+      tags:
+        - Chat
+      summary: 获取会话的所有消息
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          description: 会话UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 消息列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionMessagesResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /chatbox/session/{session_id}/title:
+    put:
+      tags:
+        - Chat
+      summary: 更新会话标题
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          description: 会话UUID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+              properties:
+                title:
+                  type: string
+                  description: 新标题
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateTitleResponse'
+        '400':
+          description: 标题为空
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 会话不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /chatbox/abort:
+    post:
+      tags:
+        - Chat
+      summary: 中止正在运行的 Agent
+      security:
+        - BearerAuth: []
+      description: |
+        通过 Redis 发送 abort 信号，通知正在运行的 Agent SSE 流终止。
+        前端在用户点击「停止」按钮时调用。正在运行的流会在下一个 node 产出后
+        检测到信号并发送 `aborted` 事件终止。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sessionId
+              properties:
+                sessionId:
+                  type: string
+                  format: uuid
+                  description: 要中止的会话 ID
+      responses:
+        '200':
+          description: Abort 信号已发送
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  sessionId:
+                    type: string
+                  message:
+                    type: string
+        '400':
+          description: 缺少 sessionId
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /chatbox/session/{session_id}/events:
+    get:
+      tags:
+        - Chat
+      summary: 获取 Agent 执行事件
+      security:
+        - BearerAuth: []
+      description: |
+        获取某轮 Agent 运行的细粒度中间事件。DB 中存储原始 LLM 输出，
+        本接口在返回前清洗为结构化数据（拆分 thinking / tool_calls / text）。
+        用于前端刷新后恢复历史思考过程展示。
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          description: 会话 UUID
+          schema:
+            type: string
+            format: uuid
+        - name: messageId
+          in: query
+          required: true
+          description: 触发 Agent 运行的用户消息 ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 事件列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  sessionId:
+                    type: string
+                  messageId:
+                    type: integer
+                  events:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        seq:
+                          type: integer
+                        content:
+                          type: object
+                          description: 清洗后的结构化数据（DB 存储原始 LLM 输出，API 返回前清洗）
+                          properties:
+                            thinking:
+                              type: array
+                              items:
+                                type: string
+                              description: Agent 中间推理过程
+                            tool_calls:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  name:
+                                    type: string
+                                  args:
+                                    type: object
+                              description: 本轮调用的工具列表
+                            text:
+                              type: string
+                              description: 清洗后的可见文本（去除 thinking/tool_call 块后的剩余内容）
+                        created_at:
+                          type: string
+                          format: date-time
+                  total:
+                    type: integer
+        '400':
+          description: 缺少 messageId 参数
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /notes:
+    post:
+      tags:
+        - Notes
+      summary: 创建笔记
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateNoteRequest'
+      responses:
+        '200':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteActionResponse'
+        '400':
+          description: 缺少 pdfId
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /notes/{pdf_id}:
+    get:
+      tags:
+        - Notes
+      summary: 获取某 PDF 的所有笔记
+      security:
+        - BearerAuth: []
+      description: 'Flask 路由: GET /notes/<pdf_id>'
+      parameters:
+        - name: pdf_id
+          in: path
+          required: true
+          description: PDF 文件 Hash
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 笔记列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteListResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /notes/{note_id}:
+    put:
+      tags:
+        - Notes
+      summary: 更新笔记
+      security:
+        - BearerAuth: []
+      description: 'Flask 路由: PUT /notes/<int:note_id>'
+      parameters:
+        - name: note_id
+          in: path
+          required: true
+          description: 笔记ID
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNoteRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteActionResponse'
+        '400':
+          description: 未提供任何可更新字段
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Notes
+      summary: 删除笔记
+      security:
+        - BearerAuth: []
+      description: 'Flask 路由: DELETE /notes/<int:note_id>'
+      parameters:
+        - name: note_id
+          in: path
+          required: true
+          description: 笔记ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteActionResponse'
+        '404':
+          description: 笔记不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /notes/batch-create:
+    post:
+      tags:
+        - Notes
+      summary: 批量创建笔记
+      security:
+        - BearerAuth: []
+      description: |
+        批量创建笔记（上限 30 条）。
+        Flask 路由: POST /notes/batch-create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - notes
+              properties:
+                notes:
+                  type: array
+                  maxItems: 30
+                  items:
+                    type: object
+                    required:
+                      - content
+                    properties:
+                      pdf_id:
+                        type: string
+                        nullable: true
+                        description: 关联的 PDF 文件 Hash（可选）
+                      title:
+                        type: string
+                        nullable: true
+                      content:
+                        type: string
+                        description: 笔记内容（必填）
+                      tags:
+                        type: array
+                        nullable: true
+                        items:
+                          type: string
+      responses:
+        '201':
+          description: 批量创建结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  created:
+                    type: integer
+                    description: 成功创建数量
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        index:
+                          type: integer
+                        note_id:
+                          type: integer
+                          nullable: true
+                        status:
+                          type: string
+                          enum: [created, failed]
+                        error:
+                          type: string
+                          nullable: true
+        '400':
+          description: 参数校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /notes/batch-delete:
+    post:
+      tags:
+        - Notes
+      summary: 批量删除笔记
+      security:
+        - BearerAuth: []
+      description: |
+        批量删除笔记（上限 50 条）。
+        Flask 路由: POST /notes/batch-delete
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - note_ids
+              properties:
+                note_ids:
+                  type: array
+                  maxItems: 50
+                  items:
+                    type: integer
+                  description: 要删除的笔记 ID 列表
+      responses:
+        '200':
+          description: 批量删除结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: integer
+                    description: 成功删除数量
+                  failed:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        note_id:
+                          type: integer
+                        error:
+                          type: string
+        '400':
+          description: 参数校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /highlight:
+    post:
+      tags:
+        - Highlight
+      summary: 创建高亮
+      security:
+        - BearerAuth: []
+      description: 前端画了高亮以后，后端要存到数据库。这里的传入坐标是像素坐标。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateHighlightRequest'
+      responses:
+        '200':
+          description: 创建成功，返回归一化后的坐标，也就是0.0-1.0的坐标
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateHighlightResponse'
+        '400':
+          description: 缺少必填字段
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: PDF 不在用户库中
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+        - Highlight
+      summary: 获取某 PDF 的所有高亮
+      security:
+        - BearerAuth: []
+      description: 返回归一化坐标 (0.0-1.0)，前端需乘以当前 Canvas 尺寸渲染
+      parameters:
+        - name: pdfId
+          in: query
+          required: true
+          description: PDF 文件 Hash
+          schema:
+            type: string
+        - name: page
+          in: query
+          required: false
+          description: 按页码筛选
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 高亮列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HighlightListResponse'
+        '400':
+          description: 缺少 pdfId
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /highlight/{highlight_id}:
+    put:
+      tags:
+        - Highlight
+      summary: 更新高亮颜色
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: highlight_id
+          in: path
+          required: true
+          description: 高亮ID
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateHighlightRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Highlight
+      summary: 删除高亮
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: highlight_id
+          in: path
+          required: true
+          description: 高亮ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /translate/paragraph:
+    post:
+      tags:
+        - Translate
+      summary: 翻译段落（按需触发，带缓存）
+      security:
+        - BearerAuth: []
+      description: |
+        前端点击某段落的翻译按钮时调用。
+        后端流程：解析段落 ID → 从 DB 取原文 → 调用 LLM 翻译 → 结果存库。
+        已翻译过的段落会命中缓存直接返回，除非 force=true。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TranslateParagraphRequest'
+      responses:
+        '200':
+          description: 翻译结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranslateParagraphResponse'
+        '400':
+          description: 缺少参数或段落 ID 格式错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 段落原文为空
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /translate/text:
+    post:
+      tags:
+        - Translate
+      summary: 翻译选中文本（带上下文）
+      security:
+        - BearerAuth: []
+      description: |
+        用户框选一段文字后调用。
+        如果提供了 pdfId，后端会取前 N 段原文作为上下文，帮助 LLM 更准确地翻译。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TranslateTextRequest'
+      responses:
+        '200':
+          description: 翻译结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranslateTextResponse'
+        '400':
+          description: 缺少 text 或 text 为空
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /translate/full_page:
+    post:
+      tags:
+        - Translate
+      summary: Full-page streaming translation
+      security:
+        - BearerAuth: []
+      description: |
+        Frontend sends the paragraphs for one page.
+        Backend first returns cached translations for that page, then streams newly generated paragraph translations.
+        Response format is text/event-stream with history / translation events.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FullPageTranslateRequest'
+      responses:
+        '200':
+          description: Streaming translation response (SSE)
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                example: |
+                  data: {"type":"history","translations":[]}
+
+                  data: {"type":"translation","paragraphId":"pdf_chk_xxx_1_0","translation":"sample translation"}
+
+                  data: [DONE]
+        '400':
+          description: Missing pdfId or paragraphs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /translate/page/{pdf_id}/{page_number}:
+    get:
+      tags:
+        - Translate
+      summary: 获取某页的所有历史翻译
+      security:
+        - BearerAuth: []
+      description: 用户刷新页面后，前端批量获取之前翻译过的段落缓存
+      parameters:
+        - name: pdf_id
+          in: path
+          required: true
+          description: PDF 文件 Hash
+          schema:
+            type: string
+        - name: page_number
+          in: path
+          required: true
+          description: 页码
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 该页所有已翻译的段落
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageTranslationsResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /link/data:
+    post:
+      tags:
+        - Link
+      summary: 智能引用与论文元数据查询
+      security:
+        - BearerAuth: []
+      description: |
+        根据 pdfId 和目标段落 ID，解析当前引用位置并查询对应论文的元数据。
+        该接口主要用于前端点击引用标记后展示被引论文信息。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkDataRequest'
+      responses:
+        '200':
+          description: 返回论文信息；未找到时 `valid=0`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkDataResponse'
+        '400':
+          description: 缺少 pdfId / targetParagraphId 或段落 ID 格式错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: PDF 文件不存在或段落内容为空
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /link/{pdf_id}/all:
+    get:
+      tags:
+        - Link
+      summary: 获取论文全部引用映射
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: pdf_id
+          in: path
+          required: true
+          description: PDF 文件 Hash
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pdfId:
+                    type: string
+                  citations:
+                    type: object
+                    additionalProperties:
+                      $ref: '#/components/schemas/LinkDataResponse'
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 未找到文档
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /health:
+    get:
+      tags:
+        - System
+      summary: 健康检查
+      security: []
+      description: 用于前端检测后端是否存活，公开接口，不需要认证
+      responses:
+        '200':
+          description: 系统状态
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  services:
+                    type: object
+                    properties:
+                      celery:
+                        type: boolean
+                      rag:
+                        type: boolean
+                      translate:
+                        type: boolean
+                      agent:
+                        type: boolean
+                      chat:
+                        type: boolean
+  /kg/projects:
+    get:
+      tags:
+        - KnowledgeGraph
+      summary: 获取图谱项目列表
+      description: 获取当前用户的所有知识图谱项目
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: 图谱项目列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphProjectListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags:
+        - KnowledgeGraph
+      summary: 创建图谱项目
+      description: 创建新的知识图谱项目
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGraphProjectRequest'
+      responses:
+        '201':
+          description: 图谱项目创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphProjectResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /kg/projects/{project_id}:
+    get:
+      tags:
+        - KnowledgeGraph
+      summary: 获取图谱项目详情
+      description: 获取指定图谱项目的完整信息，包括所有节点和边
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 图谱项目详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphProjectResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: 图谱项目不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags:
+        - KnowledgeGraph
+      summary: 更新图谱项目
+      description: 更新图谱项目的名称和描述
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateGraphProjectRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphProjectResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: 图谱项目不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - KnowledgeGraph
+      summary: 删除图谱项目
+      description: 删除指定的图谱项目及其所有节点和边
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Graph project deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: 图谱项目不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /kg/projects/{project_id}/nodes:
+    post:
+      tags:
+        - KnowledgeGraph
+      summary: 创建节点
+      description: 在指定图谱项目中创建新节点
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateNodeRequest'
+      responses:
+        '201':
+          description: 节点创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphNodeResponse'
+        '400':
+          description: 请求参数错误或节点label已存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: 图谱项目不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /kg/projects/{project_id}/edges:
+    post:
+      tags:
+        - KnowledgeGraph
+      summary: 创建边
+      description: 在指定图谱项目中创建新边
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEdgeRequest'
+      responses:
+        '201':
+          description: 边创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphEdgeResponse'
+        '400':
+          description: 请求参数错误或节点不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: 图谱项目不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /kg/projects/{project_id}/papers:
+    post:
+      tags:
+        - KnowledgeGraph
+      summary: 添加论文到图谱上下文
+      description: 将论文添加到图谱项目的上下文中
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkPaperRequest'
+      responses:
+        '200':
+          description: 添加成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Paper added to graph context successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: 图谱项目或论文不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /kg/projects/{project_id}/papers/{paper_id}:
+    delete:
+      tags:
+        - KnowledgeGraph
+      summary: 从图谱上下文移除论文
+      description: 从图谱项目的上下文中移除论文
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: paper_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 移除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Paper removed from graph context successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: 图谱项目或论文不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /kg/projects/{project_id}/batch-nodes:
+    post:
+      tags:
+        - KnowledgeGraph
+      summary: 批量创建知识图谱节点
+      description: |
+        批量创建节点（上限 50 个）。
+        Flask 路由: POST /kg/projects/<project_id>/batch-nodes
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - nodes
+              properties:
+                nodes:
+                  type: array
+                  maxItems: 50
+                  items:
+                    type: object
+                    required:
+                      - label
+                      - name
+                    properties:
+                      label:
+                        type: string
+                        description: 节点类型
+                      name:
+                        type: string
+                        description: 节点名称
+                      properties:
+                        type: object
+                        additionalProperties: true
+                      parent_id:
+                        type: string
+                        format: uuid
+                        nullable: true
+      responses:
+        '201':
+          description: 批量创建结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  created:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        index:
+                          type: integer
+                        node_id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                  failed:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        index:
+                          type: integer
+                        reason:
+                          type: string
+        '400':
+          description: 参数校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /kg/projects/{project_id}/batch-edges:
+    post:
+      tags:
+        - KnowledgeGraph
+      summary: 批量创建知识图谱边
+      description: |
+        批量创建边/关系（上限 100 条）。
+        Flask 路由: POST /kg/projects/<project_id>/batch-edges
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - edges
+              properties:
+                edges:
+                  type: array
+                  maxItems: 100
+                  items:
+                    type: object
+                    required:
+                      - source_id
+                      - target_id
+                      - relation_type
+                    properties:
+                      source_id:
+                        type: string
+                        format: uuid
+                      target_id:
+                        type: string
+                        format: uuid
+                      relation_type:
+                        type: string
+                      properties:
+                        type: object
+                        additionalProperties: true
+      responses:
+        '201':
+          description: 批量创建结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  created:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        index:
+                          type: integer
+                        edge_id:
+                          type: string
+                          format: uuid
+                        relation_type:
+                          type: string
+                  failed:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        index:
+                          type: integer
+                        reason:
+                          type: string
+        '400':
+          description: 参数校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /kg/nodes/{node_id}:
+    put:
+      tags:
+        - KnowledgeGraph
+      summary: 更新节点
+      description: 更新节点的label和properties
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: node_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNodeRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphNodeResponse'
+        '400':
+          description: 请求参数错误或节点label已存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: 节点不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - KnowledgeGraph
+      summary: 删除节点
+      description: 删除指定节点及其相关的所有边
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: node_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Node deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: 节点不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /kg/nodes/{node_id}/papers:
+    post:
+      tags:
+        - KnowledgeGraph
+      summary: 关联论文到节点
+      description: 将论文关联到指定节点
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: node_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkPaperRequest'
+      responses:
+        '200':
+          description: 关联成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Paper linked to node successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: 节点或论文不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /kg/nodes/{node_id}/papers/{paper_id}:
+    delete:
+      tags:
+        - KnowledgeGraph
+      summary: 取消论文关联
+      description: 取消论文与节点的关联
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: node_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: paper_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 取消关联成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Paper unlinked from node successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: 节点或论文不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /kg/nodes/{node_id}/notes:
+    post:
+      tags:
+        - KnowledgeGraph
+      summary: 关联笔记到节点
+      description: 将笔记关联到指定节点
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: node_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkNoteRequest'
+      responses:
+        '200':
+          description: 关联成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Note linked to node successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: 节点或笔记不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /kg/nodes/{node_id}/notes/{note_id}:
+    delete:
+      tags:
+        - KnowledgeGraph
+      summary: 取消笔记关联
+      description: 取消笔记与节点的关联
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: node_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: note_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 取消关联成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Note unlinked from node successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: 节点或笔记不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /kg/edges/{edge_id}:
+    put:
+      tags:
+        - KnowledgeGraph
+      summary: 更新边
+      description: 更新边的relation_type和description
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: edge_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateEdgeRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphEdgeResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: 边不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - KnowledgeGraph
+      summary: 删除边
+      description: 删除指定的边
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: edge_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Edge deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: 边不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /proposals/pending:
+    get:
+      tags:
+        - Agent
+      summary: 获取待处理的 Proposal 列表
+      description: 返回当前用户的 pending 状态 Proposal
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Proposal 列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalListResponse'
+  /proposals/{proposal_id}:
+    get:
+      tags:
+        - Agent
+      summary: 获取单个 Proposal 详情
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: proposal_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Proposal 详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalDetailResponse'
+        '404':
+          description: Proposal 不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /proposals/{proposal_id}/action:
+    post:
+      tags:
+        - Agent
+      summary: 对 Proposal 进行操作（批准/拒绝）
+      description: |
+        批准时异步执行操作，立即返回审批结果（status=approved）。
+        仅 pending 状态的 Proposal 可操作。
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: proposal_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProposalActionRequest'
+      responses:
+        '200':
+          description: 操作成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalActionResponse'
+        '404':
+          description: Proposal 不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /agent/tools:
+    get:
+      tags:
+        - Agent
+      summary: 获取可用工具列表
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: mode
+          in: query
+          required: false
+          description: 模式过滤（chat 模式只返回检索类工具，agent 模式返回全量工具）
+          schema:
+            type: string
+            enum:
+              - chat
+              - agent
+      responses:
+        '200':
+          description: 工具列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolListResponse'
+  /agent/skills:
+    get:
+      tags:
+        - Agent
+      summary: 获取可用技能列表
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 技能列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillListResponse'
+  /skills:
+    get:
+      tags:
+        - Skill
+      summary: 获取所有可用 Skill
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Skill 列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillListResponse'
+    post:
+      tags:
+        - Skill
+      summary: 创建用户自定义 Skill
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSkillRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillItemResponse'
+  /skills/user:
+    get:
+      tags:
+        - Skill
+      summary: 获取用户自定义 Skill 列表
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 用户 Skill 列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillListResponse'
+  /skills/builtin:
+    get:
+      tags:
+        - Skill
+      summary: 获取内置 Skill 列表
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 内置 Skill 列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillListResponse'
+  /skills/{skill_id}:
+    get:
+      tags:
+        - Skill
+      summary: 获取单个 Skill
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: skill_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Skill 详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillItemResponse'
+    put:
+      tags:
+        - Skill
+      summary: 更新用户自定义 Skill
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: skill_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSkillRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillItemResponse'
+    delete:
+      tags:
+        - Skill
+      summary: 删除用户自定义 Skill
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: skill_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+  /profile/facts:
+    get:
+      tags:
+        - Profile
+      summary: 获取用户事实列表
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 按 fact_type 过滤
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FactListResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - Profile
+      summary: 添加用户事实
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddFactRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FactResponse'
+        '400':
+          description: 缺少必填字段
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /profile/facts/{fact_id}:
+    put:
+      tags:
+        - Profile
+      summary: 更新用户事实
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: fact_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateFactRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FactResponse'
+        '400':
+          description: 缺少 fact_content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Profile
+      summary: 删除用户事实
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: fact_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteFactResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /profile/reports/latest:
+    get:
+      tags:
+        - Profile
+      summary: 获取本周报告
+      description: |
+        返回本周的周报记录（每日增量追加的 Markdown）。
+        若本周尚无报告则 report 为 null。
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            default: weekly
+          description: 报告类型，当前仅支持 weekly
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /profile/reports/generate:
+    post:
+      tags:
+        - Profile
+      summary: 触发每日记忆管理（异步）
+      description: |
+        每天首次 Agent 模式对话时自动触发，若昨日已处理则跳过。包含两个独立的异步任务：
+        1. **Fact 管理**（MemR1）：拉取昨日所有 session 的用户消息（仅 role=user），
+           一次性交给 LLM 做 fact CRUD（create/update/delete）
+        2. **日报生成**：LLM 总结昨日用户消息，生成日摘要追加到本周周报
+        也可通过此接口手动触发。
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateReportRequest'
+      responses:
+        '202':
+          description: 已接受，异步处理中
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 每日记忆管理任务已提交（fact 管理 + 日报生成）
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /userinfo/profile:
+    get:
+      tags:
+        - UserInfo
+      summary: 获取用户画像
+      security:
+        - BearerAuth: []
+      description: |
+        获取用户的完整画像，包括事实层和情景摘要层。
+        - 事实层：用户静态偏好（身份、研究目标、输出偏好等）
+        - 情景摘要层：周期性摘要（近期关注点、研究进度等）
+      responses:
+        '200':
+          description: 用户画像
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /userinfo/facts:
+    get:
+      tags:
+        - UserInfo
+      summary: 获取用户事实层
+      security:
+        - BearerAuth: []
+      description: 获取用户的静态偏好信息
+      responses:
+        '200':
+          description: 用户事实层
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  facts:
+                    $ref: '#/components/schemas/UserFacts'
+    put:
+      tags:
+        - UserInfo
+      summary: 更新用户事实层
+      security:
+        - BearerAuth: []
+      description: |
+        用户直接编辑事实层，Agent 无权修改。
+        可以部分更新，只传需要修改的字段。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserFactsUpdateRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserFactsUpdateResponse'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /userinfo/summaries:
+    get:
+      tags:
+        - UserInfo
+      summary: 获取用户情景摘要列表
+      security:
+        - BearerAuth: []
+      description: 获取用户的周期性摘要列表，按时间倒序排列
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: 返回数量限制
+          schema:
+            type: integer
+            default: 10
+            maximum: 50
+        - name: offset
+          in: query
+          required: false
+          description: 偏移量
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: 情景摘要列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSummaryListResponse'
+  /userinfo/summaries/{summary_id}:
+    get:
+      tags:
+        - UserInfo
+      summary: 获取单个情景摘要
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: summary_id
+          in: path
+          required: true
+          description: 摘要 ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 情景摘要详情
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  summary:
+                    $ref: '#/components/schemas/UserSummary'
+        '404':
+          description: 摘要不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags:
+        - UserInfo
+      summary: 更新情景摘要
+      security:
+        - BearerAuth: []
+      description: |
+        用户或 Agent 都可以修改情景摘要。
+        用户可见可编辑，Agent 会在会话结束后异步生成/更新。
+      parameters:
+        - name: summary_id
+          in: path
+          required: true
+          description: 摘要 ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserSummaryUpdateRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSummaryUpdateResponse'
+        '404':
+          description: 摘要不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - UserInfo
+      summary: 删除情景摘要
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: summary_id
+          in: path
+          required: true
+          description: 摘要 ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '404':
+          description: 摘要不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /tasks:
+    get:
+      summary: 获取任务列表
+      description: 获取当前用户的异步任务列表，支持按类型和状态过滤
+      tags:
+        - tasks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: task_type
+          in: query
+          description: 任务类型过滤
+          required: false
+          schema:
+            type: string
+            enum:
+              - pdf_parse
+              - paper_download
+              - rag_vectorize
+              - session_title_gen
+              - proposal_execute
+              - session_summary
+              - weekly_report
+        - name: status
+          in: query
+          description: 任务状态过滤
+          required: false
+          schema:
+            type: string
+            enum:
+              - pending
+              - running
+              - completed
+              - failed
+              - cancelled
+        - name: limit
+          in: query
+          description: 返回数量限制
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          description: 分页偏移量
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: 任务列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /tasks/{task_id}:
+    get:
+      summary: 查询任务状态
+      description: 查询指定任务的详细状态信息
+      tags:
+        - tasks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: task_id
+          in: path
+          description: 任务ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 任务状态详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskStatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: 任务不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Task not found
+    delete:
+      summary: 取消任务
+      description: 取消正在运行或等待中的任务
+      tags:
+        - tasks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: task_id
+          in: path
+          description: 任务ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 任务已取消
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Task cancelled successfully
+                  task_id:
+                    type: string
+        '400':
+          description: 任务无法取消（已完成或已失败）
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Cannot cancel completed task
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: 任务不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Task not found
+  /tasks/stream:
+    get:
+      summary: 任务进度SSE流
+      description: 订阅任务进度更新的SSE流，可选择订阅特定任务或所有任务
+      tags:
+        - tasks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: task_id
+          in: query
+          description: 可选：订阅特定任务的进度更新。不提供则订阅所有任务
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: SSE事件流
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: |
+                  SSE事件流，每个事件包含：
+                  - event: task_progress
+                  - data: TaskProgressEvent JSON对象
+
+                  示例：
+                  ```
+                  event: task_progress
+                  data: {"task_id":"abc123","task_type":"pdf_parse","status":"running","progress":45,"message":"正在解析第3页..."}
+
+                  event: task_progress
+                  data: {"task_id":"abc123","task_type":"pdf_parse","status":"completed","progress":100,"result":{"paper_id":"uuid-xxx"}}
+                  ```
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /tasks/{task_id}/status:
+    get:
+      summary: 查询单个 Celery 任务状态
+      tags:
+        - tasks
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 任务状态查询成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task_id:
+                    type: string
+                  state:
+                    type: string
+                  progress:
+                    type: object
+                    nullable: true
+                  result:
+                    type: object
+                    nullable: true
+                  error:
+                    type: string
+                    nullable: true
+  /batch/{batch_id}/status:
+    get:
+      summary: 查询批量任务聚合状态
+      tags:
+        - batch
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: batch_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 批量任务状态查询成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  batch_id:
+                    type: string
+                  batch_type:
+                    type: string
+                  summary:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      pending:
+                        type: integer
+                      processing:
+                        type: integer
+                      completed:
+                        type: integer
+                      failed:
+                        type: integer
+                      pre_failed:
+                        type: integer
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        task_id:
+                          type: string
+                        state:
+                          type: string
+                        progress:
+                          type: object
+                          nullable: true
+                        result:
+                          type: object
+                          nullable: true
+                        error:
+                          type: string
+                          nullable: true
+                  created_at:
+                    type: string
+                    format: date-time
+        '404':
+          description: 批量任务不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT Access Token，通过 /api/auth/login 或 /api/auth/register 获取。
+        在请求头中以 `Authorization: Bearer <token>` 方式携带。
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        code:
+          type: string
+          description: 机器可读的错误码，前端按此字段判断错误类型
+          example: MISSING_FIELDS
+        error:
+          type: string
+          description: 人类可读的错误信息，可直接展示给用户
+          example: Invalid file type
+    RegisterRequest:
+      type: object
+      required:
+        - username
+        - email
+        - password
+      description: |
+        注册第 1 步：提交用户信息，服务端发送验证码到邮箱。
+        若启用邀请码功能，inviteCode 为必填。
+      properties:
+        username:
+          type: string
+          minLength: 2
+          maxLength: 30
+          description: 用户名（字母、数字、中文、下划线、连字符）
+          example: achyut
+        email:
+          type: string
+          format: email
+          description: 邮箱（不区分大小写）
+          example: achyut@example.com
+        password:
+          type: string
+          minLength: 8
+          description: 密码，至少 8 位，须包含至少一个字母和一个数字
+          example: pass1234
+        inviteCode:
+          type: string
+          description: 邀请码（6 位 base32，启用邀请码功能时必填）
+          example: A3BK7Q
+    VerificationCodeSentResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Verification code sent to your email
+    VerifyRegisterRequest:
+      type: object
+      required:
+        - email
+        - code
+      description: 注册第 2 步：提交邮箱验证码，完成注册
+      properties:
+        email:
+          type: string
+          format: email
+          example: achyut@example.com
+        code:
+          type: string
+          pattern: ^\d{6}$
+          description: 6 位数字验证码
+          example: '123456'
+    UserInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+    AuthResponse:
+      type: object
+      description: 注册/登录成功的统一响应
+      properties:
+        message:
+          type: string
+          example: Login successful
+        user:
+          $ref: '#/components/schemas/UserInfo'
+        accessToken:
+          type: string
+          description: JWT Access Token
+    ResendCodeRequest:
+      type: object
+      required:
+        - email
+      description: 重发验证码（注册/重置密码通用）
+      properties:
+        email:
+          type: string
+          format: email
+          example: achyut@example.com
+        purpose:
+          type: string
+          enum:
+            - register
+            - reset
+          default: register
+          description: 验证码用途
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: achyut@example.com
+        password:
+          type: string
+    ForgotPasswordRequest:
+      type: object
+      required:
+        - email
+      description: 忘记密码第 1 步：发送验证码到邮箱
+      properties:
+        email:
+          type: string
+          format: email
+          example: achyut@example.com
+    SimpleMessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+    ResetPasswordRequest:
+      type: object
+      required:
+        - email
+        - code
+        - newPassword
+      description: 忘记密码第 2 步：验证码 + 新密码
+      properties:
+        email:
+          type: string
+          format: email
+          example: achyut@example.com
+        code:
+          type: string
+          pattern: ^\d{6}$
+          description: 6 位数字验证码
+          example: '123456'
+        newPassword:
+          type: string
+          minLength: 8
+          description: 新密码，至少 8 位，须包含至少一个字母和一个数字
+          example: newpass1234
+    RefreshRequest:
+      type: object
+      properties:
+        refreshToken:
+          type: string
+          description: Refresh Token（可选，由 HttpOnly Cookie 自动提供）
+    RefreshResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: 新的 Access Token
+    MeResponse:
+      type: object
+      properties:
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            username:
+              type: string
+            email:
+              type: string
+              format: email
+            avatarUrl:
+              type: string
+              nullable: true
+            bio:
+              type: string
+              nullable: true
+            preferences:
+              type: object
+              additionalProperties: true
+            createdAt:
+              type: string
+              format: date-time
+    MeUpdateRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        bio:
+          type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+        preferences:
+          type: object
+          additionalProperties: true
+    PasswordChangeRequest:
+      type: object
+      required:
+        - oldPassword
+        - newPassword
+      properties:
+        oldPassword:
+          type: string
+        newPassword:
+          type: string
+          minLength: 8
+          description: 新密码，至少 8 位，须包含至少一个字母和一个数字
+    PasswordChangeResponse:
+      type: object
+      description: 修改密码成功后返回新 Token
+      properties:
+        message:
+          type: string
+          example: Password changed successfully
+        accessToken:
+          type: string
+          description: 新的 JWT Access Token
+    StatsResponse:
+      type: object
+      properties:
+        stats:
+          type: object
+          additionalProperties: true
+    AccountDeleteRequest:
+      type: object
+      required:
+        - password
+      properties:
+        password:
+          type: string
+    LibraryItem:
+      type: object
+      description: 用户文献库中的单条文献信息
+      required:
+        - pdfId
+        - title
+        - tags
+        - addedAt
+        - fileSize
+        - totalPages
+        - processStatus
+        - readStatus
+      properties:
+        pdfId:
+          type: string
+          description: PDF 文件 Hash，作为文献的唯一标识
+        title:
+          type: string
+          description: 文献标题
+          example: Attention Is All You Need
+        tags:
+          type: array
+          description: 文献所属标签/分组列表
+          items:
+            type: string
+          example:
+            - NLP
+            - Transformer
+        addedAt:
+          type: string
+          format: date-time
+          description: 文献加入当前用户文献库的时间
+        fileSize:
+          type: integer
+          description: 文件大小（字节）
+          example: 1234567
+        totalPages:
+          type: integer
+          description: PDF 总页数
+          example: 14
+        processStatus:
+          type: string
+          description: |
+            PDF 解析/预处理状态，对应后端 global_file.process_status。
+            例如：pending / processing / completed / failed / unknown
+          example: completed
+        readStatus:
+          type: string
+          description: 文献阅读状态（如 unread / reading / done）
+          example: unread
+    LibraryListResponse:
+      type: object
+      description: 文献库列表响应
+      required:
+        - items
+        - page
+        - pageSize
+      properties:
+        items:
+          type: array
+          description: 当前页的文献列表
+          items:
+            $ref: '#/components/schemas/LibraryItem'
+        page:
+          type: integer
+          description: 当前页码（从 1 开始）
+          example: 1
+        pageSize:
+          type: integer
+          description: 每页返回的文献数量
+          example: 50
+    UploadResponse:
+      type: object
+      properties:
+        pdfId:
+          type: string
+          description: 文件Hash，作为PDF的全局唯一标识
+        taskId:
+          type: string
+          description: Celery异步任务ID，用于轮询处理进度
+        status:
+          type: string
+          description: 任务状态，包括pending, processing, completed, failed
+        pageCount:
+          type: integer
+          description: PDF文件的页数
+        filename:
+          type: string
+          description: 上传时的原始文件名
+        isNewUpload:
+          type: boolean
+          description: 用file_hash查globalfile表，true 表示文件不存在，需要重新上传；false 表示文件已存在（秒传）
+    ImportLinkRequest:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: string
+          description: DOI、arXiv ID、直接 PDF 链接或论文落地页链接
+          example: https://arxiv.org/abs/1706.03762
+    ResolvedImportLink:
+      type: object
+      required:
+        - source_type
+        - normalized_input
+      properties:
+        source_type:
+          type: string
+          description: 识别出的来源类型
+          enum:
+            - doi
+            - arxiv
+            - pdf_url
+            - biorxiv
+            - medrxiv
+            - osf_preprints
+            - google_scholar
+            - journal
+        normalized_input:
+          type: string
+          description: 归一化后的核心输入
+        landing_url:
+          type: string
+          nullable: true
+          description: 解析过程中识别到的论文落地页
+        pdf_url:
+          type: string
+          nullable: true
+          description: 最终可下载的 PDF 链接
+        title:
+          type: string
+          nullable: true
+          description: 解析到的论文标题
+        doi:
+          type: string
+          nullable: true
+          description: 解析到的 DOI
+        arxiv_id:
+          type: string
+          nullable: true
+          description: 解析到的 arXiv ID
+    ImportLinkResponse:
+      allOf:
+        - $ref: '#/components/schemas/UploadResponse'
+        - type: object
+          properties:
+            resolved:
+              $ref: '#/components/schemas/ResolvedImportLink'
+    Paragraph:
+      type: object
+      description: 解析后的PDF段落对象，代码见parse_paragraphs函数
+      required:
+        - id
+        - page
+        - index
+        - bbox
+        - content
+        - wordCount
+      properties:
+        id:
+          type: string
+          description: 段落ID段落唯一标识符 (格式：pdf_chk_{pdf_id前8位}_{页码}_{块号})
+          example: pdf_chk_11451419_198_10
+        page:
+          type: integer
+          description: 页数
+          minimum: 1
+        index:
+          type: integer
+          description: 当前页面的文本块索引(PyMuPDF block_no)
+          minimum: 1
+        bbox:
+          type: array
+          description: 段落在PDF页面中的坐标，[x0, y0, x1, y1]（单位：PDF points）
+          items:
+            type: number
+            format: float
+          example:
+            - 100
+            - 100
+            - 200
+            - 200
+        content:
+          type: string
+          description: 清洗后的文本内容，如果文本块完全位于顶部或底部区域，视为噪音；忽略len<5的非实质性文本碎片
+          example: This is a test paragraph.
+        wordCount:
+          type: integer
+          description: 段落中单词数量
+          minimum: 1
+          example: 10
+    ParagraphList:
+      type: array
+      description: 段落的列表
+      items:
+        $ref: '#/components/schemas/Paragraph'
+    StatusResponse:
+      type: object
+      required:
+        - status
+        - currentPage
+        - totalPages
+        - error
+        - paragraphs
+      properties:
+        status:
+          type: string
+          description: 任务状态，包括pending, processing, completed, failed
+        currentPage:
+          type: integer
+          description: 当前处理到的页数
+        totalPages:
+          type: integer
+          description: PDF文件的总页数
+        error:
+          type: string
+          description: 错误信息
+          example: Invalid file type
+        paragraphs:
+          $ref: '#/components/schemas/ParagraphList'
+    Metadata:
+      type: object
+      description: PDF文件的元数据，依托史。这些字段由 fitz.Document.metadata（PyMuPDF）从 PDF 文件自身的元数据中提取。
+      example:
+        title: Attention Is All You Need
+        author: Ashish Vaswani et al.
+        subject: ''
+        keywords: ''
+        creator: LaTeX
+        producer: pdfTeX-1.40.17
+        creationDate: D:20170612...
+        modDate: D:20170612...
+        format: PDF 1.5
+    Dimension:
+      type: object
+      description: PDF文件单页的尺寸
+      required:
+        - width
+        - height
+      properties:
+        width:
+          type: number
+          format: float
+        height:
+          type: number
+          format: float
+    InfoResponse:
+      type: object
+      required:
+        - id
+        - pageCount
+        - metadata
+      properties:
+        id:
+          type: string
+          description: PDF文件Hash
+        pageCount:
+          type: integer
+          description: PDF文件的页数
+        metadata:
+          description: PDF文件的元数据,这些字段由 fitz.Document.metadata（PyMuPDF）从 PDF 文件自身的元数据中提取。
+          $ref: '#/components/schemas/Metadata'
+        dimensions:
+          type: array
+          description: PDF文件每页的尺寸
+          items:
+            $ref: '#/components/schemas/Dimension'
+    LayoutOverlayItem:
+      type: object
+      required:
+        - page
+        - bboxNorm
+      properties:
+        page:
+          type: integer
+          description: 页数
+          minimum: 1
+        index:
+          type: integer
+          description: 当前类型元素在文档中的索引
+        bboxNorm:
+          type: object
+          description: 归一化到 [0,1] 的布局框
+          required:
+            - left
+            - top
+            - width
+            - height
+          properties:
+            left:
+              type: number
+              format: float
+            top:
+              type: number
+              format: float
+            width:
+              type: number
+              format: float
+            height:
+              type: number
+              format: float
+    LayoutResponse:
+      type: object
+      required:
+        - pdfId
+        - layout
+      properties:
+        pdfId:
+          type: string
+          description: PDF文件Hash
+        layout:
+          type: object
+          required:
+            - images
+            - tables
+            - formulas
+          properties:
+            images:
+              type: array
+              items:
+                $ref: '#/components/schemas/LayoutOverlayItem'
+            tables:
+              type: array
+              items:
+                $ref: '#/components/schemas/LayoutOverlayItem'
+            formulas:
+              type: array
+              items:
+                $ref: '#/components/schemas/LayoutOverlayItem'
+    MarkdownResponse:
+      type: object
+      required:
+        - pdfId
+        - markdown
+        - source
+      properties:
+        pdfId:
+          type: string
+          description: PDF文件Hash
+        markdown:
+          type: string
+          description: PDF 全文 Markdown 内容
+        source:
+          type: string
+          description: 全文来源
+          enum:
+            - mineru_full_md
+            - paragraph_fallback
+            - empty
+    ExplainOverlayRequest:
+      type: object
+      required:
+        - page
+        - kind
+        - overlayId
+      properties:
+        overlayId:
+          type: string
+          description: Overlay identifier from the layout response
+        page:
+          type: integer
+          minimum: 1
+        kind:
+          type: string
+          enum:
+            - image
+            - table
+            - formula
+        sessionId:
+          type: string
+          description: Optional session ID for saving explain result to chat history
+        bboxNorm:
+          type: object
+          description: Normalized bounding box, used as fallback when stored image is unavailable
+          properties:
+            left:
+              type: number
+              format: float
+            top:
+              type: number
+              format: float
+            width:
+              type: number
+              format: float
+            height:
+              type: number
+              format: float
+        model:
+          type: string
+          description: Override LLM model name (e.g. gpt-4o, qwen-vl-plus)
+        apiKey:
+          type: string
+          description: Override API key
+        apiBase:
+          type: string
+          description: Override API base URL
+    ExplainOverlayResponse:
+      type: object
+      required:
+        - pdfId
+        - overlayId
+        - page
+        - kind
+      properties:
+        pdfId:
+          type: string
+        overlayId:
+          type: string
+        sessionId:
+          type: string
+          nullable: true
+          description: Session ID if chat history was saved
+        page:
+          type: integer
+          minimum: 1
+        kind:
+          type: string
+          enum:
+            - image
+            - table
+            - formula
+        latex:
+          type: string
+          description: LaTeX content (only present when kind=formula)
+        analysis:
+          type: string
+          description: Generated explanation text from VLM, or OCR-extracted text as fallback. May be empty if both fail.
+    OverlayChatRequest:
+      type: object
+      required:
+        - page
+        - kind
+        - bboxNorm
+        - message
+      properties:
+        overlayId:
+          type: string
+          description: Overlay identifier from the layout response
+        page:
+          type: integer
+          minimum: 1
+        kind:
+          type: string
+          enum:
+            - image
+            - table
+            - formula
+        bboxNorm:
+          type: object
+          required:
+            - left
+            - top
+            - width
+            - height
+          properties:
+            left:
+              type: number
+              format: float
+            top:
+              type: number
+              format: float
+            width:
+              type: number
+              format: float
+            height:
+              type: number
+              format: float
+        message:
+          type: string
+          description: User follow-up question for the selected region
+        history:
+          type: array
+          description: Previous region-chat messages
+          items:
+            type: object
+            required:
+              - role
+              - content
+            properties:
+              role:
+                type: string
+                enum:
+                  - user
+                  - assistant
+              content:
+                type: string
+        model:
+          type: string
+          description: Override LLM model name (e.g. gpt-4o, qwen-vl-plus)
+        apiKey:
+          type: string
+          description: Override API key
+        apiBase:
+          type: string
+          description: Override API base URL
+    OverlayChatResponse:
+      type: object
+      required:
+        - pdfId
+        - page
+        - kind
+        - bboxNorm
+        - answer
+        - imageDataUrl
+      properties:
+        pdfId:
+          type: string
+        overlayId:
+          type: string
+          nullable: true
+        page:
+          type: integer
+          minimum: 1
+        kind:
+          type: string
+          enum:
+            - image
+            - table
+            - formula
+        bboxNorm:
+          type: object
+          required:
+            - left
+            - top
+            - width
+            - height
+          properties:
+            left:
+              type: number
+              format: float
+            top:
+              type: number
+              format: float
+            width:
+              type: number
+              format: float
+            height:
+              type: number
+              format: float
+        contextText:
+          type: string
+          description: Nearby paragraph context used for the chat
+        answer:
+          type: string
+          description: Multimodal follow-up answer for the selected region
+        imageDataUrl:
+          type: string
+          description: Cropped overlay image as a PNG data URL
+    PdfImageResponse:
+      type: object
+      required:
+        - id
+        - mimeType
+        - base64
+      properties:
+        id:
+          type: string
+          description: 图片唯一标识
+        mimeType:
+          type: string
+          description: 图片 MIME 类型
+          example: image/jpeg
+        base64:
+          type: string
+          description: Data URL 格式的 Base64 图片内容
+    LibraryTagRequest:
+      type: object
+      description: 为文献添加标签的请求体
+      required:
+        - tag
+      properties:
+        tag:
+          type: string
+          description: 标签名 / 分组名
+          example: NLP
+    LibraryActionResponse:
+      type: object
+      description: 文献库中简单状态变更操作（添加/移除标签、删除文献）的通用响应
+      required:
+        - success
+      properties:
+        success:
+          type: boolean
+          description: 是否操作成功
+          example: true
+        error:
+          type: string
+          description: 失败时的错误信息（仅在失败时返回）
+          example: Failed to delete literature
+    UploadedAttachment:
+      type: object
+      description: 预上传的附件信息
+      properties:
+        id:
+          type: string
+          description: 附件临时 ID
+          example: att_1234567890
+        category:
+          type: string
+          enum:
+            - image
+            - file
+          description: 附件类型
+        file_path:
+          type: string
+          description: 临时存储路径（COS key）
+          example: temp/attachments/user_123/att_1234567890.png
+        metadata:
+          type: object
+          description: 附件元数据
+          properties:
+            filename:
+              type: string
+              description: 原始文件名
+            size:
+              type: integer
+              description: 文件大小（字节）
+            mime_type:
+              type: string
+              description: MIME 类型
+            width:
+              type: integer
+              description: 图片宽度（仅图片）
+            height:
+              type: integer
+              description: 图片高度（仅图片）
+      required:
+        - id
+        - category
+        - file_path
+        - metadata
+    AttachmentUploadResponse:
+      type: object
+      description: 附件预上传响应
+      properties:
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/UploadedAttachment'
+      required:
+        - attachments
+    NewSessionResponse:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+          description: 新生成的会话ID（此时尚未写库，懒创建）
+        title:
+          type: string
+          example: 新对话
+        isNew:
+          type: boolean
+          example: true
+        messageCount:
+          type: integer
+          example: 0
+    AttachmentReference:
+      type: object
+      description: 消息中的附件引用
+      discriminator:
+        propertyName: category
+      required:
+        - category
+      properties:
+        category:
+          type: string
+          enum:
+            - image
+            - file
+            - citation
+            - note
+          description: 附件类别
+    UploadedAttachmentReference:
+      allOf:
+        - $ref: '#/components/schemas/AttachmentReference'
+        - type: object
+          description: 引用预上传的附件（image/file）
+          required:
+            - attachment_id
+          properties:
+            attachment_id:
+              type: string
+              description: 预上传的附件 ID
+              example: att_1234567890
+    CitationAttachmentReference:
+      allOf:
+        - $ref: '#/components/schemas/AttachmentReference'
+        - type: object
+          description: 引用文献库中的段落
+          required:
+            - data
+          properties:
+            data:
+              type: object
+              required:
+                - paper_id
+                - paragraph_id
+              properties:
+                paper_id:
+                  type: string
+                  description: 论文 ID
+                paragraph_id:
+                  type: string
+                  description: 段落 ID
+                text:
+                  type: string
+                  description: 引用的段落文本
+    NoteAttachmentReference:
+      allOf:
+        - $ref: '#/components/schemas/AttachmentReference'
+        - type: object
+          description: 引用用户笔记
+          required:
+            - data
+          properties:
+            data:
+              type: object
+              required:
+                - note_id
+              properties:
+                note_id:
+                  type: string
+                  description: 笔记 ID
+                content:
+                  type: string
+                  description: 笔记内容片段
+    MessageRequest:
+      type: object
+      required:
+        - message
+        - sessionId
+      properties:
+        message:
+          type: string
+          description: 用户消息内容
+          example: 你好，我是小智，有什么可以帮你的吗？
+        sessionId:
+          type: string
+          format: uuid
+          description: 会话ID
+          example: 123e4567-e89b-12d3-a456-426614174000
+        pdfId:
+          type: string
+          description: 可选。关联的PDF文件Hash。如果不传，会从请求头 X-Paper-Id 中读取。
+        model:
+          type: string
+          description: 指定使用的模型（覆盖全局配置）
+          example: gpt-4
+        apiKey:
+          type: string
+          description: 指定使用的 API Key（覆盖全局配置）
+        apiBase:
+          type: string
+          description: 指定使用的 API Base URL（覆盖全局配置）
+        history:
+          type: array
+          description: 可选，前端传入的历史覆盖（用于重发/编辑场景）。提供时跳过数据库历史查询。
+          items:
+            type: object
+            required:
+              - role
+              - content
+            properties:
+              role:
+                type: string
+                enum:
+                  - user
+                  - assistant
+              content:
+                type: string
+        pruneFromId:
+          description: 可选，指定从哪条消息开始裁剪并重发。
+          oneOf:
+            - type: integer
+            - type: string
+        images:
+          type: array
+          description: |
+            可选，用户粘贴的图片（base64 编码，不含 data:image 前缀）。
+            后端处理策略：
+            - chat 模式：先将 base64 图片发送给 VLM 提取补充信息，若失败则 fallback 到 OCR
+            - agent 模式：先将 base64 图片发送给 VLM 提取补充信息，若失败则 fallback 到 OCR
+            图片同时作为 ChatAttachment (category=image) 持久化到数据库。
+            最多处理 5 张。
+          items:
+            type: string
+            format: byte
+        attachments:
+          type: array
+          description: |
+            可选，消息附件引用列表。
+            - 外部文件（image/file）：需要先通过 /chatbox/attachments/upload 预上传，然后引用 attachment_id
+            - 文献库内容（citation/note）：直接嵌入相关信息（类型+位置）
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/UploadedAttachmentReference'
+              - $ref: '#/components/schemas/CitationAttachmentReference'
+              - $ref: '#/components/schemas/NoteAttachmentReference'
+    Citation:
+      type: object
+      description: RAG 检索引用源
+      properties:
+        source_type:
+          type: string
+          description: 引用类型
+          enum:
+            - vector
+            - graph
+        id:
+          type: string
+          description: 引用源ID
+        text:
+          type: string
+          description: 引用文本片段
+        score:
+          type: number
+          format: float
+          description: 相似度分数
+        name:
+          type: string
+          description: 实体名称 (graph 类型)
+    StreamEvent:
+      type: object
+      description: SSE 流式事件，type 决定数据结构
+      properties:
+        type:
+          type: string
+          enum:
+            - step
+            - thinking
+            - chunk
+            - final
+            - aborted
+            - error
+          description: |
+            step: 中间步骤进度;
+            thinking: Agent 中间推理过程;
+            chunk: 增量文本;
+            final: 最终结果;
+            aborted: 用户中止 Agent 运行;
+            error: 错误
+        sessionId:
+          type: string
+          format: uuid
+          description: 当前会话 ID
+        step:
+          type: string
+          description: 当前步骤描述 (type=step)
+          example: 检索相关信息
+        text:
+          type: string
+          description: 中间推理文本 (type=thinking)
+        delta:
+          type: string
+          description: 增量文本 (type=chunk)
+          example: 这是新生成的一段文本
+        response:
+          type: string
+          description: 最终回答 (type=final)
+        citations:
+          type: array
+          description: 引用列表 (type=final)
+          items:
+            $ref: '#/components/schemas/Citation'
+        steps:
+          type: array
+          description: 全部执行步骤 (type=final 或 type=aborted)
+          items:
+            type: string
+        partial_response:
+          type: string
+          description: 被打断前已生成的部分回答 (type=aborted)，可能为 null
+          nullable: true
+        context_used:
+          type: object
+          description: 上下文使用信息 (type=final)
+        error:
+          type: string
+          description: 错误信息 (type=error)
+          example: 检索相关信息失败
+    Session:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        pdfId:
+          type: string
+          description: 关联的PDF文件Hash
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    SessionListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Session'
+        total:
+          type: integer
+    DeleteSessionResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        sessionId:
+          type: string
+          format: uuid
+        message:
+          type: string
+    MessageAttachment:
+      type: object
+      description: 消息附件（对应 chat_attachments 表）
+      properties:
+        id:
+          type: integer
+        category:
+          type: string
+          description: '附件类别: image, file, citation, note'
+          enum:
+            - image
+            - file
+            - citation
+            - note
+        file_path:
+          type: string
+          description: 存储路径（针对 image/file，仅后端使用）
+        data:
+          type: object
+          description: |
+            附件数据，根据 category 不同而不同：
+            - image: {base64: string, mime_type: string} - base64 编码的图片数据，前端可直接渲染
+            - file: {filename: string, size: number, mime_type: string, download_url: string} - 文件元数据
+            - citation: {paper_id: string, paragraph_id: string, text: string} - 引用的段落信息
+            - note: {note_id: string, content: string} - 笔记内容
+    Message:
+      type: object
+      description: 消息对象，可以参考backend/services/chat_service.py#format_messages
+      properties:
+        id:
+          type: integer
+          description: 消息ID
+        role:
+          type: string
+          enum:
+            - user
+            - assistant
+        content:
+          type: string
+        citations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Citation'
+        timestamp:
+          type: string
+          format: date-time
+        attachments:
+          type: array
+          description: 消息附件列表（图片等），仅当消息有附件时返回
+          items:
+            $ref: '#/components/schemas/MessageAttachment'
+    SessionMessagesResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        sessionId:
+          type: string
+          format: uuid
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+        total:
+          type: integer
+    UpdateTitleResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        sessionId:
+          type: string
+          format: uuid
+        title:
+          type: string
+    CreateNoteRequest:
+      type: object
+      required:
+        - pdfId
+      properties:
+        pdfId:
+          type: string
+          description: 关联的 PDF 文件 Hash
+        title:
+          type: string
+          description: 笔记标题（可选）
+        content:
+          type: string
+          description: 笔记内容，Markdown 或 JSON（可选）
+        keywords:
+          type: array
+          items:
+            type: string
+          description: 关键词列表（可选）
+    NoteActionResponse:
+      type: object
+      description: 创建/更新/删除笔记的通用成功响应
+      required:
+        - success
+        - message
+      properties:
+        success:
+          type: boolean
+        id:
+          type: integer
+          description: 笔记ID，仅创建时返回，更新和删除时为空
+        message:
+          type: string
+          example: Note created
+    Note:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 笔记ID
+        title:
+          type: string
+          description: 笔记标题
+          example: Transformer 架构要点
+        content:
+          type: string
+          description: 笔记内容（Markdown 或 JSON）
+          example: |-
+            ## 核心思想
+            Self-Attention 机制...
+        keywords:
+          type: array
+          items:
+            type: string
+          description: 关键词列表
+          example:
+            - transformer
+            - attention
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    NoteListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        notes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Note'
+        total:
+          type: integer
+    UpdateNoteRequest:
+      type: object
+      description: 至少需要提供 title、content、keywords 中的一个字段，也就是至少更新一个
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+        keywords:
+          type: array
+          items:
+            type: string
+    Rect:
+      type: object
+      description: 归一化后的矩形坐标 (0.0 - 1.0)，前端需乘以当前 Canvas 尺寸渲染
+      required:
+        - x
+        - 'y'
+        - width
+        - height
+      properties:
+        x:
+          type: number
+          format: float
+        'y':
+          type: number
+          format: float
+        width:
+          type: number
+          format: float
+        height:
+          type: number
+          format: float
+    Highlight:
+      type: object
+      properties:
+        id:
+          type: integer
+        page:
+          type: integer
+        rects:
+          type: array
+          items:
+            $ref: '#/components/schemas/Rect'
+        text:
+          type: string
+        color:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    HighlightListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        highlights:
+          type: array
+          items:
+            $ref: '#/components/schemas/Highlight'
+        total:
+          type: integer
+    CreateHighlightRequest:
+      type: object
+      required:
+        - pdfId
+        - page
+        - rects
+        - pageWidth
+        - pageHeight
+        - text
+        - color
+      description: 创建高亮请求。text和color待定是否可选
+      properties:
+        pdfId:
+          type: string
+          description: PDF 文件 Hash
+        page:
+          type: integer
+          description: 页码
+          example: 1
+        rects:
+          type: array
+          description: 选区矩形列表，是像素坐标
+          items:
+            $ref: '#/components/schemas/Rect'
+        pageWidth:
+          type: number
+          description: 当前页面宽度（像素），用于坐标归一化
+          example: 800
+        pageHeight:
+          type: number
+          description: 当前页面高度（像素），用于坐标归一化
+          example: 1200
+        text:
+          type: string
+          description: 选中的文本内容
+        color:
+          type: string
+          description: 高亮颜色，格式是16进制
+          default: '#FFFF00'
+          example: '#FFFF00'
+    CreateHighlightResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        id:
+          type: integer
+          description: 新建高亮ID
+        rects:
+          type: array
+          description: 归一化后的矩形坐标
+          items:
+            $ref: '#/components/schemas/Rect'
+        message:
+          type: string
+          example: Highlight created
+    UpdateHighlightRequest:
+      type: object
+      properties:
+        color:
+          type: string
+          description: 新颜色
+          example: '#FF0000'
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+    TranslateParagraphRequest:
+      type: object
+      required:
+        - pdfId
+        - paragraphId
+      properties:
+        pdfId:
+          type: string
+          description: PDF 文件 Hash
+        paragraphId:
+          type: string
+          description: 段落 ID（格式：pdf_chk_{hash前8位}_{页码}_{块号}）
+          example: pdf_chk_11451419_3_2
+        force:
+          type: boolean
+          description: 是否强制重新翻译（忽略缓存）
+          default: false
+        model:
+          type: string
+          description: 指定使用的模型（覆盖全局配置）
+        apiKey:
+          type: string
+          description: 指定使用的 API Key
+        apiBase:
+          type: string
+          description: 指定使用的 API Base URL
+    TranslateParagraphResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        translation:
+          type: string
+          description: 翻译结果
+        cached:
+          type: boolean
+          description: 是否命中缓存
+        paragraphId:
+          type: string
+    TranslateTextRequest:
+      type: object
+      required:
+        - text
+      properties:
+        text:
+          type: string
+          description: 选中的文本
+          example: Self-attention mechanism
+        pdfId:
+          type: string
+          description: 关联的 PDF Hash（可选，用于获取上下文提高翻译质量）
+        contextParagraphs:
+          type: integer
+          description: 用于上下文的段落数量
+          default: 3
+        model:
+          type: string
+          description: 指定使用的模型（覆盖全局配置）
+        apiKey:
+          type: string
+          description: 指定使用的 API Key
+        apiBase:
+          type: string
+          description: 指定使用的 API Base URL
+    TranslateTextResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        originalText:
+          type: string
+          description: 原文
+        translatedText:
+          type: string
+          description: 翻译结果
+        hasContext:
+          type: boolean
+          description: 是否使用了上下文
+        contextLength:
+          type: integer
+          description: 上下文长度
+    FullPageTranslateRequest:
+      type: object
+      required:
+        - pdfId
+        - paragraphs
+      properties:
+        pdfId:
+          type: string
+          description: PDF file hash
+        paragraphs:
+          type: array
+          description: Paragraph list for the current page
+          items:
+            type: object
+            required:
+              - paragraphId
+              - content
+            properties:
+              paragraphId:
+                type: string
+                description: Paragraph ID
+              content:
+                type: string
+                description: Original paragraph text
+    PageTranslationsResponse:
+      type: object
+      properties:
+        pdfId:
+          type: string
+        page:
+          type: integer
+        translations:
+          type: object
+          description: '键为 paragraphId，值为翻译文本。如 { "pdf_chk_xxx_3_1": "翻译内容" }'
+          additionalProperties:
+            type: string
+    LinkDataRequest:
+      type: object
+      required:
+        - pdfId
+      properties:
+        pdfId:
+          type: string
+          description: PDF 文件 Hash
+        targetParagraphId:
+          type: string
+          description: 段落 ID（格式：pdf_chk_{pdf_id前8位}_{页码}_{块号}）
+          example: pdf_chk_11451419_198_10
+        page:
+          type: integer
+          description: 页码（1-indexed）
+        index:
+          type: integer
+          description: 段落索引（0-indexed）
+    LinkDataResponse:
+      type: object
+      properties:
+        title:
+          type: string
+          description: 论文标题
+          example: Attention Is All You Need
+        paperId:
+          type: string
+          description: Semantic Scholar 唯一 ID
+          example: 649fd3ed34e241d960e651f9302e131912a10cda
+        url:
+          type: string
+          description: 论文链接
+          example: https://www.semanticscholar.org/paper/...
+        snippet:
+          type: string
+          description: 论文简介，目前使用 Semantic Scholar 的 abstract
+        published_date:
+          type: string
+          description: 发表年份
+          example: '2017'
+        venue:
+          type: string
+          description: 发表刊物或会议
+          example: NIPS
+        citationCount:
+          type: integer
+          description: 引用次数
+          example: 12000
+        authors:
+          type: array
+          description: 作者列表
+          items:
+            type: string
+          example:
+            - Ashish Vaswani
+            - Noam Shazeer
+        source:
+          type: string
+          description: 数据来源
+          example: semantic_scholar
+        valid:
+          type: integer
+          description: 搜索结果是否有效，1 表示有效，0 表示未找到
+          enum:
+            - 0
+            - 1
+    GraphProject:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 图谱项目UUID
+        name:
+          type: string
+          maxLength: 100
+          description: 图谱项目名称
+        description:
+          type: string
+          nullable: true
+          description: 图谱项目描述
+        node_count:
+          type: integer
+          description: 节点数量
+        edge_count:
+          type: integer
+          description: 边数量
+        paper_count:
+          type: integer
+          description: 关联论文数量
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    GraphProjectListResponse:
+      type: object
+      properties:
+        projects:
+          type: array
+          items:
+            $ref: '#/components/schemas/GraphProject'
+        total:
+          type: integer
+          description: 总数量
+    CreateGraphProjectRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          maxLength: 100
+          description: 图谱项目名称
+        description:
+          type: string
+          nullable: true
+          description: 图谱项目描述
+    GraphNode:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 节点UUID
+        label:
+          type: string
+          maxLength: 255
+          description: 节点标签（关键词），如"Transformer"
+        description:
+          type: string
+          nullable: true
+          description: 节点语义描述，供搜索和 Agent 使用
+        properties:
+          type: object
+          nullable: true
+          description: 节点UI属性（颜色、大小、位置等）
+          additionalProperties: true
+          example:
+            color: '#3b82f6'
+            size: 1
+            x: 100
+            'y': 200
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: 父节点ID（树状视图用，与 parent_of 边冗余同步）
+        is_root:
+          type: boolean
+          default: false
+          description: 是否为根节点（树状视图入口）
+        linked_paper_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: 关联的论文ID列表
+        linked_note_ids:
+          type: array
+          items:
+            type: integer
+          description: 关联的笔记ID列表
+        created_at:
+          type: string
+          format: date-time
+    GraphEdge:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 边UUID
+        source_node_id:
+          type: string
+          format: uuid
+          description: 源节点ID
+        target_node_id:
+          type: string
+          format: uuid
+          description: 目标节点ID
+        relation_type:
+          type: string
+          maxLength: 50
+          default: related_to
+          description: 关系类型
+          enum:
+            - related_to
+            - parent_of
+            - derived_from
+            - is_a
+            - part_of
+            - causes
+            - supports
+        description:
+          type: string
+          maxLength: 255
+          nullable: true
+          description: 关系描述
+        created_at:
+          type: string
+          format: date-time
+    GraphProjectDetail:
+      allOf:
+        - $ref: '#/components/schemas/GraphProject'
+        - type: object
+          properties:
+            nodes:
+              type: array
+              items:
+                $ref: '#/components/schemas/GraphNode'
+            edges:
+              type: array
+              items:
+                $ref: '#/components/schemas/GraphEdge'
+            paper_ids:
+              type: array
+              items:
+                type: string
+                format: uuid
+              description: 图谱上下文中的论文ID列表
+    GraphProjectResponse:
+      type: object
+      properties:
+        project:
+          $ref: '#/components/schemas/GraphProjectDetail'
+    UpdateGraphProjectRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+          description: 图谱项目名称
+        description:
+          type: string
+          nullable: true
+          description: 图谱项目描述
+    CreateNodeRequest:
+      type: object
+      required:
+        - label
+      properties:
+        label:
+          type: string
+          maxLength: 255
+          description: 节点标签（关键词）
+        description:
+          type: string
+          nullable: true
+          description: 节点语义描述
+        properties:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: 节点UI属性
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: 父节点ID（创建时可直接指定父节点）
+    GraphNodeResponse:
+      type: object
+      properties:
+        node:
+          $ref: '#/components/schemas/GraphNode'
+    CreateEdgeRequest:
+      type: object
+      required:
+        - source_node_id
+        - target_node_id
+      properties:
+        source_node_id:
+          type: string
+          format: uuid
+          description: 源节点ID
+        target_node_id:
+          type: string
+          format: uuid
+          description: 目标节点ID
+        relation_type:
+          type: string
+          maxLength: 50
+          default: related_to
+          enum:
+            - related_to
+            - parent_of
+            - derived_from
+            - is_a
+            - part_of
+            - causes
+            - supports
+        description:
+          type: string
+          maxLength: 255
+          nullable: true
+          description: 关系描述
+    GraphEdgeResponse:
+      type: object
+      properties:
+        edge:
+          $ref: '#/components/schemas/GraphEdge'
+    LinkPaperRequest:
+      type: object
+      required:
+        - paper_id
+      properties:
+        paper_id:
+          type: string
+          format: uuid
+          description: 论文ID
+    UpdateNodeRequest:
+      type: object
+      properties:
+        label:
+          type: string
+          maxLength: 255
+          description: 节点标签（关键词）
+        description:
+          type: string
+          nullable: true
+          description: 节点语义描述
+        properties:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: 节点UI属性
+    LinkNoteRequest:
+      type: object
+      required:
+        - note_id
+      properties:
+        note_id:
+          type: integer
+          description: 笔记ID
+    UpdateEdgeRequest:
+      type: object
+      properties:
+        relation_type:
+          type: string
+          maxLength: 50
+          enum:
+            - related_to
+            - parent_of
+            - derived_from
+            - is_a
+            - part_of
+            - causes
+            - supports
+        description:
+          type: string
+          maxLength: 255
+          nullable: true
+          description: 关系描述
+    Proposal:
+      type: object
+      description: Agent 提出的修改提案，需要用户审批
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Proposal ID
+        session_id:
+          type: string
+          description: 关联的聊天会话 ID
+        action_type:
+          type: string
+          description: |
+            操作类型（对应 Agent 工具名）：
+            - manage_kg_node: 知识图谱节点操作（创建/删除/重命名/移动）
+            - manage_kg_edge: 知识图谱边操作（创建/删除/更新）
+            - tag: 标签操作（添加/移除）
+            - manage_notes: 笔记操作（创建/更新/删除）
+        title:
+          type: string
+          description: 操作的简短描述
+          example: 删除节点 'Transformer'
+        description:
+          type: string
+          description: 操作的详细说明
+        action_params:
+          type: object
+          description: 操作参数，与对应工具的参数一致
+        status:
+          type: string
+          enum:
+            - pending
+            - approved
+            - rejected
+            - expired
+            - executed
+            - failed
+          description: |
+            提案状态：
+            - pending: 等待审批
+            - approved: 已批准
+            - rejected: 已拒绝
+            - expired: 已过期（24小时未处理）
+            - executed: 已执行
+            - failed: 执行失败
+        review_comment:
+          type: string
+          description: 审批意见
+        execution_result:
+          type: object
+          description: 执行结果
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+          description: 过期时间（创建后 24 小时）
+        reviewed_at:
+          type: string
+          format: date-time
+        executed_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - action_type
+        - title
+        - action_params
+        - status
+    ProposalListResponse:
+      type: object
+      properties:
+        proposals:
+          type: array
+          items:
+            $ref: '#/components/schemas/Proposal'
+        total:
+          type: integer
+    ProposalDetailResponse:
+      type: object
+      properties:
+        proposal:
+          $ref: '#/components/schemas/Proposal'
+    ProposalActionRequest:
+      type: object
+      description: 用户对 Proposal 的操作
+      properties:
+        action:
+          type: string
+          enum:
+            - approve
+            - reject
+          description: |
+            操作类型：
+            - approve: 批准（异步执行，立即返回审批结果）
+            - reject: 拒绝
+        comment:
+          type: string
+          description: 操作原因（可选，拒绝时建议填写）
+      required:
+        - action
+    ProposalActionResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        proposal:
+          $ref: '#/components/schemas/Proposal'
+        message:
+          type: string
+    Tool:
+      type: object
+      description: Agent 可用的工具
+      properties:
+        name:
+          type: string
+          description: 工具名称
+          example: search_vector_db
+        description:
+          type: string
+          description: 工具描述
+        parameters:
+          type: object
+          description: 工具参数 schema（JSON Schema 格式）
+    ToolListResponse:
+      type: object
+      properties:
+        tools:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tool'
+    Skill:
+      type: object
+      description: Agent 可用的技能（结构化提示词模板）
+      properties:
+        name:
+          type: string
+          description: Skill 名称
+          example: read_paper
+        description:
+          type: string
+          description: Skill 描述，同时承担匹配语义
+        prompt_md:
+          type: string
+          description: Skill 提示词模板（Markdown）
+        type:
+          type: string
+          description: Skill 类型
+          example: user
+        id:
+          type: string
+          description: 用户自定义 Skill ID（内置 Skill 可为空）
+        is_active:
+          type: boolean
+          description: 是否启用（仅用户自定义 Skill）
+        usage_count:
+          type: integer
+          description: 使用次数（仅用户自定义 Skill）
+    SkillListResponse:
+      type: object
+      properties:
+        skills:
+          type: array
+          items:
+            $ref: '#/components/schemas/Skill'
+    CreateSkillRequest:
+      type: object
+      required:
+        - name
+        - description
+        - prompt_md
+      properties:
+        name:
+          type: string
+          description: Skill 名称
+        description:
+          type: string
+          description: Skill 描述，同时承担匹配语义
+        prompt_md:
+          type: string
+          description: Skill 提示词模板（Markdown）
+    SkillItemResponse:
+      type: object
+      properties:
+        skill:
+          $ref: '#/components/schemas/Skill'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    UpdateSkillRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          description: Skill 描述，同时承担匹配语义
+        prompt_md:
+          type: string
+    UserFact:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 事实 ID
+        fact_type:
+          type: string
+          description: 事实类型（由 LLM 自由定义，如 research_interest, expertise 等）
+          example: research_interest
+        fact_content:
+          type: string
+          description: 事实内容
+          example: 关注注意力机制优化
+        source:
+          type: string
+          description: 来源（chat / profile_edit）
+          example: chat
+        confidence:
+          type: integer
+          description: 置信度（0-100）
+          example: 70
+        pinned:
+          type: boolean
+          description: 是否置顶（pinned fact 每次对话必定注入 Agent prompt，不依赖语义检索）
+          default: false
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    FactListResponse:
+      type: object
+      properties:
+        facts:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserFact'
+    AddFactRequest:
+      type: object
+      required:
+        - fact_type
+        - fact_content
+      properties:
+        fact_type:
+          type: string
+          description: 事实类型
+          example: research_interest
+        fact_content:
+          type: string
+          description: 事实内容
+          example: 关注注意力机制优化
+        source:
+          type: string
+          description: 来源
+          default: profile_edit
+    FactResponse:
+      type: object
+      properties:
+        fact:
+          $ref: '#/components/schemas/UserFact'
+    UpdateFactRequest:
+      type: object
+      required:
+        - fact_content
+      properties:
+        fact_content:
+          type: string
+          description: 更新后的事实内容
+          example: 更新后的内容
+        pinned:
+          type: boolean
+          description: 是否置顶（可选，传入时更新）
+    DeleteFactResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+    UserReport:
+      type: object
+      description: |
+        周报采用"每日增量追加"策略：每天生成当日摘要并 append 到本周唯一的 report 记录中。
+        summary 字段为 Markdown 格式，按日期分节（## 周一 (3/24)、## 周二 (3/25) ...）。
+      properties:
+        id:
+          type: string
+          format: uuid
+        report_type:
+          type: string
+          description: 报告类型，固定为 weekly
+          example: weekly
+        summary:
+          type: string
+          description: |
+            报告内容（Markdown），按天分节追加。示例：
+            ## 周一 (3/24)
+            - 阅读了 Attention Is All You Need
+            ## 周二 (3/25)
+            - 讨论了 LoRA 微调方法
+        period_start:
+          type: string
+          format: date-time
+          description: 本周一 00:00:00 UTC
+        period_end:
+          type: string
+          format: date-time
+          description: 本周日 23:59:59 UTC
+        generated_at:
+          type: string
+          format: date-time
+          description: 最近一次追加的时间
+    ReportResponse:
+      type: object
+      properties:
+        report:
+          $ref: '#/components/schemas/UserReport'
+          nullable: true
+    GenerateReportRequest:
+      type: object
+      description: |
+        触发每日记忆管理，若已处理则跳过。包含两个独立异步任务：
+        1. Fact 管理：从昨日用户消息（仅 role=user）中提取事实，执行 CRUD
+        2. 日报生成：LLM 总结昨日用户消息，追加到本周周报
+      properties:
+        report_type:
+          type: string
+          default: weekly
+          description: 报告类型，当前仅支持 weekly
+    UserFacts:
+      type: object
+      description: |
+        用户事实层（静态偏好）
+        - 用户直接编辑，Agent 无权修改
+        - 存储用户的身份、研究目标、输出偏好等静态信息
+      properties:
+        identity:
+          type: string
+          description: 用户身份
+          example: 计算机科学博士生
+          nullable: true
+        research_goals:
+          type: array
+          items:
+            type: string
+          description: 研究目标
+          example:
+            - 研究 Transformer 架构
+            - 发表顶会论文
+        research_fields:
+          type: array
+          items:
+            type: string
+          description: 研究领域
+          example:
+            - 自然语言处理
+            - 深度学习
+        output_preferences:
+          type: object
+          description: 输出偏好
+          properties:
+            language:
+              type: string
+              description: 首选语言
+              example: 中文
+            style:
+              type: string
+              description: 回复风格
+              example: 学术风格
+              enum:
+                - academic
+                - casual
+                - technical
+            detail_level:
+              type: string
+              description: 详细程度
+              enum:
+                - brief
+                - moderate
+                - detailed
+              default: moderate
+            citation_style:
+              type: string
+              description: 引用风格
+              example: APA
+              enum:
+                - APA
+                - MLA
+                - Chicago
+                - IEEE
+    UserSummary:
+      type: object
+      description: |
+        用户情景摘要层（周期性摘要）
+        - Agent 可修改，用户可见可编辑
+        - 存储阶段性研究报告（近期关注点、研究进度、新增论文、新建标签等）
+      properties:
+        id:
+          type: string
+          description: 摘要 ID
+        period:
+          type: string
+          description: 时间周期
+          example: 2024-03-01 至 2024-03-07
+        content:
+          type: string
+          description: 摘要内容（Markdown 格式）
+          example: |
+            ## 本周研究进展
+            - 阅读了 3 篇关于 Transformer 的论文
+            - 新增标签：Attention Mechanism
+            - 重点关注：多头注意力机制的改进
+        highlights:
+          type: array
+          items:
+            type: string
+          description: 本周亮点
+          example:
+            - 发现了一个新的优化方法
+            - 完成了实验设计
+        papers_added:
+          type: array
+          items:
+            type: string
+          description: 新增论文 ID 列表
+        tags_created:
+          type: array
+          items:
+            type: string
+          description: 新建标签列表
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    UserProfile:
+      type: object
+      description: |
+        用户画像（Agent 专用），包含事实层和情景摘要层。
+        与 auth.yaml 中的 Profile 不同，这里是针对学术研究场景的高级用户画像。
+      properties:
+        facts:
+          $ref: '#/components/schemas/UserFacts'
+        summaries:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserSummary'
+    UserProfileResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        profile:
+          $ref: '#/components/schemas/UserProfile'
+    UserFactsUpdateRequest:
+      type: object
+      description: 更新用户事实层
+      properties:
+        identity:
+          type: string
+          nullable: true
+        research_goals:
+          type: array
+          items:
+            type: string
+        research_fields:
+          type: array
+          items:
+            type: string
+        output_preferences:
+          type: object
+          properties:
+            language:
+              type: string
+            style:
+              type: string
+              enum:
+                - academic
+                - casual
+                - technical
+            detail_level:
+              type: string
+              enum:
+                - brief
+                - moderate
+                - detailed
+            citation_style:
+              type: string
+              enum:
+                - APA
+                - MLA
+                - Chicago
+                - IEEE
+    UserFactsUpdateResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        facts:
+          $ref: '#/components/schemas/UserFacts'
+    UserSummaryListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        summaries:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserSummary'
+        total:
+          type: integer
+    UserSummaryUpdateRequest:
+      type: object
+      description: 更新用户情景摘要（用户或 Agent 都可以修改）
+      properties:
+        content:
+          type: string
+          description: 摘要内容（Markdown 格式）
+        highlights:
+          type: array
+          items:
+            type: string
+      required:
+        - content
+    UserSummaryUpdateResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        summary:
+          $ref: '#/components/schemas/UserSummary'
+    TaskStatus:
+      type: object
+      description: 异步任务状态
+      properties:
+        task_id:
+          type: string
+          description: 任务 ID（Celery task ID）
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+        task_type:
+          type: string
+          enum:
+            - pdf_parse
+            - rag_index
+            - generate_title
+            - execute_proposal
+            - add_paper_download
+          description: |
+            任务类型：
+            - pdf_parse: PDF 解析
+            - rag_index: RAG 向量化
+            - generate_title: 生成会话标题
+            - execute_proposal: 执行 Proposal
+            - add_paper_download: 下载论文 PDF
+        status:
+          type: string
+          enum:
+            - pending
+            - running
+            - success
+            - failed
+            - revoked
+          description: |
+            任务状态：
+            - pending: 等待执行
+            - running: 执行中
+            - success: 成功
+            - failed: 失败
+            - revoked: 已撤销
+        progress:
+          type: object
+          description: 任务进度信息
+          properties:
+            current:
+              type: integer
+              description: 当前进度
+            total:
+              type: integer
+              description: 总进度
+            percentage:
+              type: number
+              format: float
+              description: 进度百分比
+            message:
+              type: string
+              description: 进度描述
+        result:
+          type: object
+          description: 任务结果（成功时）
+        error:
+          type: string
+          description: 错误信息（失败时）
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - task_id
+        - task_type
+        - status
+    TaskListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskStatus'
+        total:
+          type: integer
+    PdfParseTaskStatus:
+      allOf:
+        - $ref: '#/components/schemas/TaskStatus'
+        - type: object
+          properties:
+            parse_status:
+              type: string
+              enum:
+                - pending
+                - mineru_parsing
+                - pymupdf_parsing
+                - mineru_parsed
+                - pymupdf_parsed
+                - rag_processing
+                - mineru_completed
+                - pymupdf_completed
+                - parse_failed
+                - rag_failed
+              description: |
+                PDF 解析详细状态：
+                - pending: 等待解析
+                - mineru_parsing: MinerU 解析中
+                - pymupdf_parsing: PyMuPDF 解析中（回退）
+                - mineru_parsed: MinerU 解析完成
+                - pymupdf_parsed: PyMuPDF 解析完成
+                - rag_processing: RAG 向量化中
+                - mineru_completed: 完全完成（MinerU）
+                - pymupdf_completed: 完全完成（PyMuPDF）
+                - parse_failed: 解析失败
+                - rag_failed: RAG 失败
+            paper_id:
+              type: string
+              description: 论文 ID
+            file_hash:
+              type: string
+              description: 文件 Hash
+            page_count:
+              type: integer
+              description: 总页数
+            parsed_pages:
+              type: integer
+              description: 已解析页数
+    PaperDownloadTaskStatus:
+      allOf:
+        - $ref: '#/components/schemas/TaskStatus'
+        - type: object
+          properties:
+            paper_id:
+              type: string
+              format: uuid
+              description: 论文 ID
+            download_status:
+              type: string
+              enum:
+                - pending
+                - downloading
+                - downloaded
+                - parse_queued
+                - completed
+                - failed
+              description: |
+                下载状态：
+                - pending: 等待下载
+                - downloading: 下载中
+                - downloaded: 下载完成
+                - parse_queued: 已加入解析队列
+                - completed: 完全完成（下载+解析）
+                - failed: 下载失败
+            download_url:
+              type: string
+              description: 下载 URL
+            file_size:
+              type: integer
+              description: 文件大小（字节）
+            downloaded_bytes:
+              type: integer
+              description: 已下载字节数
+    TaskStatusResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        task:
+          oneOf:
+            - $ref: '#/components/schemas/TaskStatus'
+            - $ref: '#/components/schemas/PdfParseTaskStatus'
+            - $ref: '#/components/schemas/PaperDownloadTaskStatus'
+  responses:
+    Unauthorized:
+      description: 未认证或 token 无效
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    BadRequest:
+      description: 请求参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

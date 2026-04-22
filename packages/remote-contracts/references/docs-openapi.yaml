@@ -1,0 +1,264 @@
+openapi: 3.0.0
+info:
+  title: README PDF Reader API
+  description: README的OpenAPI文档
+  version: 1.3.0
+servers:
+  - url: http://localhost:5000/api
+    description: 本地开发环境
+
+# 全局安全配置：所有接口默认需要 JWT Bearer Token
+# 公开接口 (register/login/refresh/health/roadmap-ping) 在各自定义中用 security: [] 覆盖
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    $ref: './components/security.yaml#/securitySchemes'
+  schemas:
+    ErrorResponse:
+      $ref: './components/schemas/common.yaml#/ErrorResponse'
+
+paths:
+  # --- Auth 相关 API ---
+  /auth/register:
+    $ref: "./paths/auth.yaml#/register"
+  /auth/verify-register:
+    $ref: "./paths/auth.yaml#/verify-register"
+  /auth/resend-code:
+    $ref: "./paths/auth.yaml#/resend-code"
+  /auth/login:
+    $ref: "./paths/auth.yaml#/login"
+  /auth/forgot-password:
+    $ref: "./paths/auth.yaml#/forgot-password"
+  /auth/reset-password:
+    $ref: "./paths/auth.yaml#/reset-password"
+  /auth/refresh:
+    $ref: "./paths/auth.yaml#/refresh"
+  /auth/logout:
+    $ref: "./paths/auth.yaml#/logout"
+  /auth/me:
+    $ref: "./paths/auth.yaml#/me"
+  /auth/password:
+    $ref: "./paths/auth.yaml#/password"
+  /auth/stats:
+    $ref: "./paths/auth.yaml#/stats"
+  /auth/account:
+    $ref: "./paths/auth.yaml#/account"
+
+  # --- Upload 相关 API (文件进入系统) ---
+  /upload/upload:
+    $ref: "./paths/pdf.yaml#/upload"
+  /upload/import-link:
+    $ref: "./paths/pdf.yaml#/import_link"
+  "/upload/{pdf_id}/status":
+    $ref: "./paths/pdf.yaml#/status"
+  /upload/batch-import:
+    $ref: "./paths/batch.yaml#/upload~1batch-import"
+  /upload/batch-upload:
+    $ref: "./paths/batch.yaml#/upload~1batch-upload"
+
+  # --- Paper 相关 API (论文内容与属性) ---
+  "/paper/{pdf_id}/metadata":
+    $ref: "./paths/papers.yaml#/paper~1{pdf_id}~1metadata"
+  "/paper/{pdf_id}/content":
+    $ref: "./paths/papers.yaml#/paper~1{pdf_id}~1content"
+  "/paper/{pdf_id}/layout":
+    $ref: "./paths/pdf.yaml#/layout"
+  "/paper/{pdf_id}/formula/{page}/{index}":
+    $ref: "./paths/pdf.yaml#/formula"
+  "/paper/{pdf_id}/overlay/explain":
+    $ref: "./paths/pdf.yaml#/overlay_explain"
+  "/paper/{pdf_id}/overlay/chat":
+    $ref: "./paths/pdf.yaml#/overlay_chat"
+  "/paper/{pdf_id}/image/{image_index}":
+    $ref: "./paths/pdf.yaml#/image"
+  /paper/batch-enrich:
+    $ref: "./paths/batch.yaml#/paper~1batch-enrich"
+  /paper/batch-reindex:
+    $ref: "./paths/batch.yaml#/paper~1batch-reindex"
+  /rag/search:
+    $ref: "./paths/papers.yaml#/rag~1search"
+
+  # --- Library 相关 API (用户书架管理) ---
+  /library/:
+    $ref: "./paths/library.yaml#/list"
+  "/library/{pdf_id}/tags":
+    $ref: "./paths/library.yaml#/add-tag"
+  "/library/{pdf_id}/tags/{tag}":
+    $ref: "./paths/library.yaml#/remove-tag"
+  "/library/{pdf_id}/title":
+    $ref: "./paths/library.yaml#/rename-title"
+  "/library/{pdf_id}":
+    $ref: "./paths/library.yaml#/delete"
+  "/library/{pdf_id}/source":
+    $ref: "./paths/pdf.yaml#/source"
+  /library/batch-delete:
+    $ref: "./paths/library.yaml#/batch-delete"
+  /library/batch-tag:
+    $ref: "./paths/library.yaml#/batch-tag"
+
+  "/kg/projects/{project_id}/batch-nodes":
+    $ref: "./paths/batch.yaml#/kg~1projects~1{project_id}~1batch-nodes"
+  "/kg/projects/{project_id}/batch-edges":
+    $ref: "./paths/batch.yaml#/kg~1projects~1{project_id}~1batch-edges"
+
+  # --- Task Status API ---
+  "/tasks/{task_id}/status":
+    $ref: "./paths/batch.yaml#/tasks~1{task_id}~1status"
+  "/batch/{batch_id}/status":
+    $ref: "./paths/batch.yaml#/batch~1{batch_id}~1status"
+
+  # --- Chat 相关 API ---
+  /chatbox/new:
+    $ref: "./paths/chat.yaml#/new"
+  /chatbox/agent:
+    $ref: "./paths/chat.yaml#/agent"
+  /chatbox/chat:
+    $ref: "./paths/chat.yaml#/chat"
+  /chatbox/sessions:
+    $ref: "./paths/chat.yaml#/sessions"
+  "/chatbox/session/{session_id}":
+    $ref: "./paths/chat.yaml#/delete-session"
+  "/chatbox/session/{session_id}/messages":
+    $ref: "./paths/chat.yaml#/session-messages"
+  "/chatbox/session/{session_id}/title":
+    $ref: "./paths/chat.yaml#/update-title"
+  /chatbox/abort:
+    $ref: "./paths/chat.yaml#/abort"
+  "/chatbox/session/{session_id}/events":
+    $ref: "./paths/chat.yaml#/session-events"
+
+  # --- Notes 相关 API ---
+  /notes:
+    $ref: "./paths/notes.yaml#/create"
+  "/notes/{pdf_id}":
+    $ref: "./paths/notes.yaml#/by-pdf-id"
+  "/notes/{note_id}":
+    $ref: "./paths/notes.yaml#/by-note-id"
+  /notes/batch-create:
+    $ref: "./paths/notes.yaml#/batch-create"
+  /notes/batch-delete:
+    $ref: "./paths/notes.yaml#/batch-delete"
+
+  # --- Highlight 相关 API ---
+  /highlight:
+    $ref: "./paths/highlight.yaml#/create"
+  "/highlight/{highlight_id}":
+    $ref: "./paths/highlight.yaml#/by-highlight-id"
+
+  # --- Translate 相关 API ---
+  /translate/paragraph:
+    $ref: "./paths/translate.yaml#/paragraph"
+  /translate/text:
+    $ref: "./paths/translate.yaml#/text"
+  /translate/full_page:
+    $ref: "./paths/translate.yaml#/full-page"
+  "/translate/page/{pdf_id}/{page_number}":
+    $ref: "./paths/translate.yaml#/page-translations"
+
+  # --- Link 相关 API ---
+  /link/data:
+    $ref: "./paths/link.yaml#/data"
+  "/link/{pdf_id}/all":
+    $ref: "./paths/link.yaml#/all"
+
+  # --- System 相关 API ---
+  /health:
+    $ref: "./paths/system.yaml#/health"
+
+  # --- KnowledgeGraph 相关 API ---
+  /kg/projects:
+    $ref: "./paths/knowledgegraph.yaml#/projects"
+  "/kg/projects/{project_id}":
+    $ref: "./paths/knowledgegraph.yaml#/projects~1{project_id}"
+  "/kg/projects/{project_id}/nodes":
+    $ref: "./paths/knowledgegraph.yaml#/projects~1{project_id}~1nodes"
+  "/kg/projects/{project_id}/edges":
+    $ref: "./paths/knowledgegraph.yaml#/projects~1{project_id}~1edges"
+  "/kg/projects/{project_id}/tree":
+    $ref: "./paths/knowledgegraph.yaml#/projects~1{project_id}~1tree"
+  "/kg/projects/{project_id}/papers":
+    $ref: "./paths/knowledgegraph.yaml#/projects~1{project_id}~1papers"
+  "/kg/projects/{project_id}/papers/{paper_id}":
+    $ref: "./paths/knowledgegraph.yaml#/projects~1{project_id}~1papers~1{paper_id}"
+  "/kg/nodes/{node_id}":
+    $ref: "./paths/knowledgegraph.yaml#/nodes~1{node_id}"
+  "/kg/nodes/{node_id}/parent":
+    $ref: "./paths/knowledgegraph.yaml#/nodes~1{node_id}~1parent"
+  "/kg/nodes/{node_id}/papers":
+    $ref: "./paths/knowledgegraph.yaml#/nodes~1{node_id}~1papers"
+  "/kg/nodes/{node_id}/papers/{paper_id}":
+    $ref: "./paths/knowledgegraph.yaml#/nodes~1{node_id}~1papers~1{paper_id}"
+  "/kg/nodes/{node_id}/notes":
+    $ref: "./paths/knowledgegraph.yaml#/nodes~1{node_id}~1notes"
+  "/kg/nodes/{node_id}/notes/{note_id}":
+    $ref: "./paths/knowledgegraph.yaml#/nodes~1{node_id}~1notes~1{note_id}"
+  "/kg/edges/{edge_id}":
+    $ref: "./paths/knowledgegraph.yaml#/edges~1{edge_id}"
+
+  # --- Proposal 相关 API ---
+  /proposals/pending:
+    $ref: "./paths/agent.yaml#/proposals"
+  "/proposals/{proposal_id}":
+    $ref: "./paths/agent.yaml#/proposal-detail"
+  "/proposals/{proposal_id}/action":
+    $ref: "./paths/agent.yaml#/proposal-action"
+
+  # --- Skill 相关 API ---
+  /skills:
+    $ref: "./paths/skill.yaml#/skills-root"
+  /skills/user:
+    $ref: "./paths/skill.yaml#/skills-user"
+  /skills/builtin:
+    $ref: "./paths/skill.yaml#/skills-builtin"
+  /skills/{skill_id}:
+    $ref: "./paths/skill.yaml#/skills-item"
+
+  # --- Profile 相关 API ---
+  /profile/facts:
+    $ref: "./paths/profile.yaml#/facts"
+  "/profile/facts/{fact_id}":
+    $ref: "./paths/profile.yaml#/facts-by-id"
+  /profile/reports/latest:
+    $ref: "./paths/profile.yaml#/reports-latest"
+  /profile/reports/generate:
+    $ref: "./paths/profile.yaml#/reports-generate"
+
+  # --- Blog 相关 API ---
+  "/blog/{file_hash}":
+    $ref: "./paths/summary.yaml#/blog"
+  "/blog/{file_hash}/regenerate":
+    $ref: "./paths/summary.yaml#/regenerate"
+
+  # --- Admin 管理后台 API ---
+  /admin/dashboard:
+    $ref: "./paths/admin.yaml#/dashboard"
+  /admin/users:
+    $ref: "./paths/admin.yaml#/users"
+  "/admin/users/{user_id}":
+    $ref: "./paths/admin.yaml#/user-detail"
+  /admin/invite-codes:
+    $ref: "./paths/admin.yaml#/invite-codes"
+  "/admin/invite-codes/{code_id}":
+    $ref: "./paths/admin.yaml#/invite-code-item"
+  /admin/invite-codes/batch-delete:
+    $ref: "./paths/admin.yaml#/invite-codes-batch-delete"
+
+  # --- Events 用户行为事件上报 API ---
+  /events:
+    $ref: "./paths/events.yaml#/report"
+
+  # --- Tasks 异步任务 API ---
+  /tasks:
+    $ref: "./paths/tasks.yaml#/tasks"
+  "/tasks/{task_id}":
+    $ref: "./paths/tasks.yaml#/tasks/{task_id}"
+  /tasks/stream:
+    $ref: "./paths/tasks.yaml#/tasks/stream"
+
+  # --- Roadmap 相关 API ---
+  /roadmap/ping:
+    $ref: "./paths/roadmap.yaml#/ping"
+  /roadmap:
+    $ref: "./paths/roadmap.yaml#/generate"

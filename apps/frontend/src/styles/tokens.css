@@ -1,0 +1,484 @@
+/*
+ * ============================================================
+ *  Design Tokens — 项目唯一的视觉变量来源
+ * ============================================================
+ *  规则：
+ *  1. 所有颜色、间距、圆角、阴影、字体、动画、z-index 在此定义
+ *  2. 组件 CSS / Tailwind 只能引用这些变量，禁止硬编码 hex / rgba
+ *  3. Dark mode 通过 .dark 类覆盖变量，组件无需感知
+ * ============================================================
+ */
+
+:root {
+  /* -------------------- Color: Background -------------------- */
+  --c-bg-primary:       #ffffff;
+  --c-bg-secondary:     #f6f8fb;
+  --c-bg-tertiary:      #edf1f6;
+  --c-bg-panel:         #fafbfc;
+  --c-bg-elevated:      rgba(255, 255, 255, 0.84);
+  --c-bg-hover:         #eef2f7;
+  --c-bg-active:        rgba(29, 53, 87, 0.08);
+  --c-bg-input:         #ffffff;
+  --c-bg-code:          #eef2f7;
+  --c-bg-page:          #f8fafd;
+
+  /* -------------------- Color: Text -------------------- */
+  --c-text-primary:     #1f2937;
+  --c-text-secondary:   #475569;
+  --c-text-tertiary:    #55657c;
+  --c-text-muted:       #7386a0;
+  --c-text-placeholder: #7e90a9;
+  --c-text-heading:     #0f172a;
+  --c-text-on-accent:   #ffffff;
+  --c-text-code:        #eb5757;
+  --c-text-code-pink:   #ec4899;
+
+  /* -------------------- Color: Border -------------------- */
+  --c-border:           #e2e8f0;
+  --c-border-light:     rgba(226, 232, 240, 0.86);
+  --c-border-input:     #cbd5e1;
+  --c-border-focus:     #75a1d2;
+  --c-border-divider:   #d6deea;
+
+  /* -------------------- Color: Accent (Brand — 藏青色) -------------------- */
+  --c-accent:           #1d3557;
+  --c-accent-hover:     #182c4a;
+  --c-accent-light:     #4370a5;
+  --c-accent-bg:        rgba(29, 53, 87, 0.1);
+  --c-accent-border:    rgba(67, 112, 165, 0.28);
+  --c-accent-gradient-start:       #1b3558;
+  --c-accent-gradient-end:         #5b8fc8;
+  --c-accent-gradient-hover-start: #223f65;
+  --c-accent-gradient-hover-end:   #74a9dd;
+  --c-accent-gradient-border:      rgba(91, 143, 200, 0.45);
+  --c-accent-sheen:                rgba(255, 255, 255, 0.22);
+
+  /* -------------------- Color: Semantic -------------------- */
+  --c-success:          #16a34a;
+  --c-success-light:    #22c55e;
+  --c-success-bg:       rgba(34, 197, 94, 0.08);
+  --c-success-bg-hover: rgba(34, 197, 94, 0.14);
+  --c-success-border:   rgba(34, 197, 94, 0.18);
+  --c-error:            #b91c1c;
+  --c-error-light:      #ef4444;
+  --c-error-bg:         rgba(254, 242, 242, 0.96);
+  --c-error-border:     rgba(239, 68, 68, 0.16);
+  --c-warning:          #f59e0b;
+  --c-warning-border:   #fde68a;
+  --c-warning-bg:       #fff7ed;
+
+  /* -------------------- Color: Status Badge -------------------- */
+  --c-badge-loading-bg:      rgba(45, 90, 142, 0.12);
+  --c-badge-loading-text:    #1e3a5f;
+  --c-badge-loading-border:  rgba(45, 90, 142, 0.24);
+  --c-badge-success-bg:      rgba(34, 197, 94, 0.1);
+  --c-badge-success-text:    #15803d;
+  --c-badge-success-border:  rgba(34, 197, 94, 0.22);
+  --c-badge-error-bg:        rgba(239, 68, 68, 0.1);
+  --c-badge-error-text:      #b91c1c;
+  --c-badge-error-border:    rgba(239, 68, 68, 0.2);
+  --c-badge-meta-bg:         rgba(116, 94, 197, 0.1);
+  --c-badge-meta-text:       #5b4bb2;
+  --c-badge-meta-border:     rgba(116, 94, 197, 0.22);
+  --c-badge-citation-bg:     rgba(217, 119, 6, 0.1);
+  --c-badge-citation-text:   #b45309;
+  --c-badge-citation-border: rgba(217, 119, 6, 0.22);
+
+  /* -------------------- Color: Star (收藏/标星) -------------------- */
+  --c-star:             #d97706;
+  --c-star-hover:       #b45309;
+  --c-star-bg:          rgba(217, 119, 6, 0.1);
+
+  /* -------------------- Color: Graph Node (知识图谱) -------------------- */
+  --c-graph-node:       #6366f1;
+  --c-graph-node-hover: #4f46e5;
+  --c-graph-node-valid: #22c55e;
+  --c-graph-node-text:  #ffffff;
+
+  /* -------------------- Color: Chart Palette (图表序列色) -------------------- */
+  --c-chart-1:          #1d3557;   /* accent — 新用户 */
+  --c-chart-2:          #16a34a;   /* success — 活跃用户 */
+  --c-chart-3:          #8b5cf6;   /* violet — 新文档 */
+  --c-chart-4:          #06b6d4;   /* cyan — 备用 */
+  --c-chart-5:          #f59e0b;   /* amber — 备用 */
+
+  /* -------------------- Color: Scrollbar -------------------- */
+  --c-scrollbar-track:  #f1f5f9;
+  --c-scrollbar-thumb:  #cbd5e1;
+  --c-scrollbar-hover:  #94a3b8;
+
+  /* -------------------- Color: Sidebar -------------------- */
+  --c-sidebar-bg:          #ffffff;
+  --c-sidebar-bg-start:    #ffffff;
+  --c-sidebar-bg-end:      #f7f9fc;
+  --c-sidebar-text:        #1f2937;
+  --c-sidebar-text-muted:  #4b5f78;
+  --c-sidebar-text-subtle: rgba(75, 95, 120, 0.82);
+  --c-sidebar-bg-hover:    rgba(15, 23, 42, 0.04);
+  --c-sidebar-bg-active:   rgba(67, 112, 165, 0.14);
+  --c-sidebar-border:      rgba(148, 163, 184, 0.26);
+  --c-sidebar-surface-glow: rgba(67, 112, 165, 0.08);
+  --c-sidebar-danger:      #fda4af;
+  --c-sidebar-danger-bg:   rgba(248, 113, 113, 0.18);
+  --c-sidebar-theme-sun:   #fbbf24;
+  --c-sidebar-theme-moon:  #cbd5e1;
+
+  /* -------------------- Color: PDF -------------------- */
+  --c-pdf-bg:           #ffffff;
+  --c-pdf-viewer-bg:    #f8fafc;
+  --c-pdf-selection:    rgba(30, 58, 95, 0.25);
+  --c-highlight:        rgba(255, 235, 59, 0.4);
+
+  /* -------------------- Color: Auth page -------------------- */
+  --c-auth-accent:      #2d5a8e;
+  --c-auth-accent-hover:#1e3a5f;
+  --c-auth-header-bg:   #0f2138;
+  --c-auth-header-bg-start: #163255;
+  --c-auth-header-bg-end:   #0f2138;
+  --c-auth-header-border:   rgba(157, 194, 230, 0.26);
+  --c-auth-header-glow:     rgba(123, 170, 216, 0.2);
+  --c-auth-control-border: rgba(255, 255, 255, 0.3);
+  --c-auth-control-text:   rgba(255, 255, 255, 0.85);
+  --c-auth-control-hover:  rgba(255, 255, 255, 0.1);
+
+  /* -------------------- Color: Brand Marks -------------------- */
+  --c-logo-bracket:     rgba(29, 53, 87, 0.34);
+  --c-logo-read:        #0f4080;
+  --c-logo-me:          #6b9de5;
+  --c-logo-tail:        #a3c6f0;
+
+  /* -------------------- Color: On Accent Surface -------------------- */
+  --c-on-accent-high:      rgba(255, 255, 255, 0.92);
+  --c-on-accent-muted:     rgba(255, 255, 255, 0.62);
+  --c-on-accent-disabled:  rgba(255, 255, 255, 0.52);
+  --c-on-accent-hover-bg:  rgba(255, 255, 255, 0.12);
+  --c-on-accent-divider:   rgba(255, 255, 255, 0.22);
+
+  /* -------------------- Color: Markdown / Content -------------------- */
+  --c-markdown-inline-code-bg: #e8edf5;
+  --c-markdown-table-head-bg:  #edf2f9;
+  --c-markdown-table-border:   #d7dfeb;
+  --c-markdown-table-row-bg:   #f5f8fc;
+  --c-chat-user-pattern-line:  rgba(30, 58, 95, 0.03);
+
+  /* -------------------- Color: Third-party Overlays -------------------- */
+  --c-katex-scrollbar-thumb:       rgba(156, 163, 175, 0.4);
+  --c-katex-scrollbar-thumb-hover: rgba(156, 163, 175, 0.6);
+
+  /* -------------------- Spacing (4px grid) -------------------- */
+  --space-0:   0px;
+  --space-px:  1px;
+  --space-0-5: 2px;
+  --space-1:   4px;
+  --space-1-5: 6px;
+  --space-2:   8px;
+  --space-2-5: 10px;
+  --space-3:   12px;
+  --space-4:   16px;
+  --space-5:   20px;
+  --space-6:   24px;
+  --space-8:   32px;
+  --space-10:  40px;
+  --space-12:  48px;
+  --space-16:  64px;
+
+  /* -------------------- Border Radius -------------------- */
+  --radius-sm:    4px;
+  --radius-md:    6px;
+  --radius-lg:    8px;
+  --radius-xl:    12px;
+  --radius-full:  9999px;
+
+  /* -------------------- Border Width -------------------- */
+  --border-width:    1px;
+  --border-width-2:  2px;
+
+  /* -------------------- Shadows -------------------- */
+  --shadow-xs:  0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-sm:  0 1px 3px rgba(15, 23, 42, 0.07);
+  --shadow-md:  0 6px 16px rgba(15, 23, 42, 0.1);
+  --shadow-lg:  0 12px 28px rgba(15, 23, 42, 0.14);
+  --shadow-xl:  0 18px 44px rgba(15, 23, 42, 0.18);
+
+  /* -------------------- Focus Ring -------------------- */
+  --ring-focus: 0 0 0 2px rgba(117, 161, 210, 0.26);
+
+  /* -------------------- Interactive (subtle 3D hover) -------------------- */
+  --interactive-hover-y: -1px;
+  --interactive-shadow-rest:   0 1px 0 rgba(255, 255, 255, 0.84) inset, 0 1px 2px rgba(15, 23, 42, 0.09);
+  --interactive-shadow-hover:  0 1px 0 rgba(255, 255, 255, 0.92) inset, 0 8px 20px rgba(15, 23, 42, 0.16);
+  --interactive-shadow-active: 0 1px 2px rgba(15, 23, 42, 0.14) inset, 0 1px 2px rgba(15, 23, 42, 0.08);
+  --interactive-outline:       rgba(67, 112, 165, 0.32);
+
+  /* -------------------- Typography -------------------- */
+  --font-sans:  'InterVariable', 'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Microsoft YaHei', system-ui, -apple-system, sans-serif;
+  --font-logo:  'InterDisplay', 'InterVariable', 'Inter', 'PingFang SC', 'Noto Sans CJK SC', sans-serif;
+  --font-mono:  ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+
+  --text-2xs:   10px;
+  --text-xs:    11px;
+  --text-sm:    12px;
+  --text-base:  14px;
+  --text-lg:    16px;
+  --text-xl:    18px;
+  --text-2xl:   20px;
+  --text-3xl:   24px;
+  --text-4xl:   48px;
+
+  --leading-tight:    1.2;
+  --leading-snug:     1.35;
+  --leading-normal:   1.5;
+  --leading-relaxed:  1.75;
+
+  --font-normal:    400;
+  --font-medium:    500;
+  --font-semibold:  600;
+  --font-bold:      700;
+
+  /* -------------------- Transition / Animation -------------------- */
+  --duration-fast:    150ms;
+  --duration-normal:  200ms;
+  --duration-slow:    300ms;
+  --ease-default:     ease;
+  --ease-out:         cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* -------------------- Z-Index -------------------- */
+  --z-base:       1;
+  --z-overlay:    10;
+  --z-sticky:     20;
+  --z-dropdown:   30;
+  --z-modal:      100;
+  --z-tooltip:    200;
+  --z-toast:      300;
+
+  /* -------------------- Layout Constants -------------------- */
+  --header-height:    44px;
+  --toolbar-height:   44px;
+  --sidebar-width:    280px;
+  --scrollbar-width:  10px;
+  --scrollbar-width-thin: 4px;
+
+  /* -------------------- Popup System (reader) -------------------- */
+  --popup-radius:           8px;
+  --popup-padding:          12px;
+  --popup-gap:              8px;
+  --popup-header-height:    36px;
+  --popup-title-size:       12px;
+  --popup-subtitle-size:    10px;
+  --popup-text-size:        12px;
+  --popup-muted-size:       11px;
+  --popup-label-size:       11px;
+  --popup-badge-size:       10px;
+  --popup-button-size:      11px;
+  --popup-line-height:      1.45;
+  --popup-icon-btn-size:    28px;
+  --popup-input-padding-y:  8px;
+  --popup-input-padding-x:  10px;
+  --popup-badge-padding-y:  5px;
+  --popup-badge-padding-x:  8px;
+  --popup-spinner-size:     20px;
+
+  /* -------------------- Button System -------------------- */
+  --btn-height-sm:      32px;
+  --btn-height-md:      36px;
+  --btn-height-lg:      42px;
+  --btn-icon-size:      20px;
+  --btn-radius:         10px;
+  --btn-gap:            8px;
+  --btn-padding-x:      12px;
+  --btn-font-size:      14px;
+  --c-btn-text:         #53647a;
+  --c-btn-text-hover:   #1f2937;
+  --c-btn-bg-hover:     rgba(15, 23, 42, 0.045);
+  --c-btn-border-hover: rgba(67, 112, 165, 0.3);
+  --c-btn-bg-active:    rgba(67, 112, 165, 0.12);
+  --c-btn-icon-active-bg:      rgba(29, 53, 87, 0.1);
+  --c-btn-icon-active-border:  rgba(67, 112, 165, 0.42);
+  --c-btn-icon-active-text:    #1d3557;
+  --shadow-btn-icon-active:    0 0 0 1px rgba(67, 112, 165, 0.22) inset, 0 10px 20px rgba(29, 53, 87, 0.14);
+}
+
+/* ============================================================
+ *  Dark Mode Overrides
+ * ============================================================ */
+.dark {
+  /* Background */
+  --c-bg-primary:       #090c11;
+  --c-bg-secondary:     #11161d;
+  --c-bg-tertiary:      #171e28;
+  --c-bg-panel:         #121923;
+  --c-bg-elevated:      rgba(10, 14, 20, 0.9);
+  --c-bg-hover:         #1d2632;
+  --c-bg-active:        rgba(122, 168, 214, 0.2);
+  --c-bg-input:         #151e2a;
+  --c-bg-code:          #1a2533;
+  --c-bg-page:          #06090d;
+
+  /* Text */
+  --c-text-primary:     #e8edf5;
+  --c-text-secondary:   #c7d1df;
+  --c-text-tertiary:    #afbccf;
+  --c-text-muted:       #8f9fb5;
+  --c-text-placeholder: #8697ad;
+  --c-text-heading:     #f3f7fc;
+  --c-text-on-accent:   #ffffff;
+  --c-text-code:        #ff7b72;
+  --c-text-code-pink:   #f9a8d4;
+
+  /* Border */
+  --c-border:           #253041;
+  --c-border-light:     rgba(59, 76, 99, 0.82);
+  --c-border-input:     #334359;
+  --c-border-focus:     #85b5e3;
+  --c-border-divider:   #2f3f56;
+
+  /* Accent */
+  --c-accent:           #7aa8d6;
+  --c-accent-hover:     #94bee8;
+  --c-accent-light:     #b0d1f0;
+  --c-accent-bg:        rgba(122, 168, 214, 0.2);
+  --c-accent-border:    rgba(140, 185, 228, 0.34);
+  --c-accent-gradient-start:       #2a4f77;
+  --c-accent-gradient-end:         #6fa6d8;
+  --c-accent-gradient-hover-start: #36608a;
+  --c-accent-gradient-hover-end:   #87b9e4;
+  --c-accent-gradient-border:      rgba(143, 188, 231, 0.52);
+  --c-accent-sheen:                rgba(255, 255, 255, 0.17);
+
+  /* Semantic */
+  --c-success:          #86efac;
+  --c-success-light:    #4ade80;
+  --c-success-bg:       rgba(34, 197, 94, 0.16);
+  --c-success-bg-hover: rgba(34, 197, 94, 0.22);
+  --c-success-border:   rgba(34, 197, 94, 0.24);
+  --c-error:            #fca5a5;
+  --c-error-light:      #f87171;
+  --c-error-bg:         rgba(127, 29, 29, 0.22);
+  --c-error-border:     rgba(248, 113, 113, 0.2);
+  --c-warning:          #d97706;
+  --c-warning-border:   rgba(217, 119, 6, 0.32);
+  --c-warning-bg:       rgba(120, 53, 15, 0.28);
+
+  /* Status Badge */
+  --c-badge-loading-bg:      rgba(123, 170, 216, 0.24);
+  --c-badge-loading-text:    #dbeafe;
+  --c-badge-loading-border:  rgba(157, 194, 230, 0.3);
+  --c-badge-success-bg:      rgba(22, 163, 74, 0.22);
+  --c-badge-success-text:    #86efac;
+  --c-badge-success-border:  rgba(34, 197, 94, 0.28);
+  --c-badge-error-bg:        rgba(220, 38, 38, 0.22);
+  --c-badge-error-text:      #fca5a5;
+  --c-badge-error-border:    rgba(248, 113, 113, 0.28);
+  --c-badge-meta-bg:         rgba(116, 94, 197, 0.2);
+  --c-badge-meta-text:       #d1c4ff;
+  --c-badge-meta-border:     rgba(116, 94, 197, 0.3);
+  --c-badge-citation-bg:     rgba(249, 115, 22, 0.18);
+  --c-badge-citation-text:   #fdba74;
+  --c-badge-citation-border: rgba(249, 115, 22, 0.28);
+
+  /* Star */
+  --c-star:             #fbbf24;
+  --c-star-hover:       #f59e0b;
+  --c-star-bg:          rgba(251, 191, 36, 0.14);
+
+  /* Graph Node */
+  --c-graph-node:       #818cf8;
+  --c-graph-node-hover: #6366f1;
+  --c-graph-node-valid: #4ade80;
+  --c-graph-node-text:  #ffffff;
+
+  /* Chart Palette */
+  --c-chart-1:          #7aa8d6;
+  --c-chart-2:          #86efac;
+  --c-chart-3:          #a78bfa;
+  --c-chart-4:          #22d3ee;
+  --c-chart-5:          #fbbf24;
+
+  /* Scrollbar */
+  --c-scrollbar-track:  transparent;
+  --c-scrollbar-thumb:  #3b4b61;
+  --c-scrollbar-hover:  #50637d;
+
+  /* Sidebar */
+  --c-sidebar-bg:          #05080d;
+  --c-sidebar-bg-start:    #05080d;
+  --c-sidebar-bg-end:      #090d14;
+  --c-sidebar-text:        #edf3fb;
+  --c-sidebar-text-muted:  #b8c5d6;
+  --c-sidebar-text-subtle: rgba(184, 197, 214, 0.82);
+  --c-sidebar-bg-hover:    rgba(255, 255, 255, 0.06);
+  --c-sidebar-bg-active:   rgba(122, 168, 214, 0.2);
+  --c-sidebar-border:      rgba(148, 163, 184, 0.22);
+  --c-sidebar-surface-glow: rgba(122, 168, 214, 0.12);
+  --c-sidebar-danger:      #fca5a5;
+  --c-sidebar-danger-bg:   rgba(248, 113, 113, 0.22);
+  --c-sidebar-theme-sun:   #f6cf63;
+  --c-sidebar-theme-moon:  #dce6f5;
+
+  /* PDF */
+  --c-pdf-bg:           #0d131d;
+  --c-pdf-viewer-bg:    #080d15;
+
+  /* Auth */
+  --c-auth-accent:      #5b8ec9;
+  --c-auth-accent-hover:#7baad8;
+  --c-auth-header-bg-start: #101f34;
+  --c-auth-header-bg-end:   #081220;
+  --c-auth-header-border:   rgba(157, 194, 230, 0.2);
+  --c-auth-header-glow:     rgba(123, 170, 216, 0.16);
+  --c-auth-control-border: rgba(255, 255, 255, 0.34);
+  --c-auth-control-text:   rgba(255, 255, 255, 0.9);
+  --c-auth-control-hover:  rgba(255, 255, 255, 0.14);
+
+  /* Brand Marks */
+  --c-logo-bracket:     rgba(236, 244, 255, 0.62);
+  --c-logo-read:        #9fc8ff;
+  --c-logo-me:          #d7e9ff;
+  --c-logo-tail:        #edf6ff;
+
+  /* On Accent Surface */
+  --c-on-accent-high:      rgba(245, 249, 255, 0.94);
+  --c-on-accent-muted:     rgba(231, 240, 251, 0.68);
+  --c-on-accent-disabled:  rgba(219, 230, 244, 0.54);
+  --c-on-accent-hover-bg:  rgba(255, 255, 255, 0.14);
+  --c-on-accent-divider:   rgba(255, 255, 255, 0.24);
+
+  /* Button System */
+  --c-btn-text:         #a8b8cb;
+  --c-btn-text-hover:   #edf3fb;
+  --c-btn-bg-hover:     rgba(255, 255, 255, 0.07);
+  --c-btn-border-hover: rgba(140, 185, 228, 0.34);
+  --c-btn-bg-active:    rgba(122, 168, 214, 0.18);
+  --c-btn-icon-active-bg:      rgba(122, 168, 214, 0.22);
+  --c-btn-icon-active-border:  rgba(159, 200, 255, 0.56);
+  --c-btn-icon-active-text:    #e6f1ff;
+  --shadow-btn-icon-active:    0 0 0 1px rgba(159, 200, 255, 0.26) inset, 0 12px 24px rgba(2, 8, 20, 0.62);
+
+  /* Markdown / Content */
+  --c-markdown-inline-code-bg: rgba(255, 255, 255, 0.08);
+  --c-markdown-table-head-bg:  rgba(255, 255, 255, 0.06);
+  --c-markdown-table-border:   rgba(255, 255, 255, 0.1);
+  --c-markdown-table-row-bg:   rgba(255, 255, 255, 0.03);
+  --c-chat-user-pattern-line:  rgba(255, 255, 255, 0.01);
+
+  /* Third-party Overlays */
+  --c-katex-scrollbar-thumb:       rgba(107, 114, 128, 0.4);
+  --c-katex-scrollbar-thumb-hover: rgba(107, 114, 128, 0.55);
+
+  /* Shadows */
+  --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.34);
+  --shadow-sm:  0 2px 6px rgba(0, 0, 0, 0.4);
+  --shadow-md:  0 10px 24px rgba(0, 0, 0, 0.44);
+  --shadow-lg:  0 16px 34px rgba(0, 0, 0, 0.5);
+  --shadow-xl:  0 24px 52px rgba(0, 0, 0, 0.58);
+
+  /* Focus Ring */
+  --ring-focus: 0 0 0 2px rgba(122, 168, 214, 0.34);
+
+  /* Interactive (reverse logic in dark mode) */
+  --interactive-hover-y: 1px;
+  --interactive-shadow-rest:   0 -1px 0 rgba(255, 255, 255, 0.04) inset, 0 1px 2px rgba(0, 0, 0, 0.46);
+  --interactive-shadow-hover:  0 -1px 0 rgba(255, 255, 255, 0.09) inset, 0 8px 18px rgba(0, 0, 0, 0.58);
+  --interactive-shadow-active: 0 2px 3px rgba(0, 0, 0, 0.58) inset, 0 1px 1px rgba(0, 0, 0, 0.32);
+  --interactive-outline:       rgba(140, 185, 228, 0.34);
+}

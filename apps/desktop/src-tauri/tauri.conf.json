@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "READMEClaw Desktop",
+  "version": "0.1.0",
+  "identifier": "com.readmeclaw.desktop",
+  "build": {
+    "beforeDevCommand": "node ../../scripts/tauri-dev.mjs",
+    "beforeBuildCommand": "npm run build --workspace @readmeclaw/frontend-app",
+    "devUrl": "http://localhost:4173",
+    "frontendDist": "../../frontend/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "READMEClaw Desktop",
+        "width": 1600,
+        "height": 980,
+        "minWidth": 1200,
+        "minHeight": 800
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.ico"
+    ]
+  }
+}
